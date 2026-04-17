@@ -1,8 +1,12 @@
-Devo adicionar no meu site?Ela já está no seu site! Nós a codificámos no motor matemático (o JavaScript) desde o primeiro rascunho sob o nome de theta.No código JavaScript que geramos, ela está escrita exatamente assim:const theta_rad = Math.atan(h_visivel / dist_m);Por que ela não está aparecendo nos painéis coloridos da última versão?Na versão final do dashboard, eu optei por exibir apenas a Ocupação Horizontal ($\alpha$) nos cards principais e ocultar a Vertical. Fiz isso porque, como vimos nos estudos de percepção marinha (Seascape Visual Impact Assessment), o que mais incomoda o olho humano num parque eólico offshore não é a altura de uma única torre (que costuma ocupar menos de $1^\circ$ vertical no horizonte), mas sim o "muro" que dezenas de torres formam na largura do oceano.Como exibir isso no seu siteSe você quiser mostrar essa informação para deixar o laudo mais completo, faz todo o sentido! Como o cálculo já é feito nos bastidores, basta adicionar um card a mais no seu HTML.Você pode adicionar este bloco logo abaixo do card de "Ocupação Horizontal" no código HTML:HTML<div class="metric">
+Você pode adicionar este bloco logo abaixo do card de "Ocupação Horizontal" no código HTML:HTML
+
+<div class="metric">
     <span>OCUPAÇÃO VERTICAL</span>
     <strong id="out_theta" style="color: var(--text-main);">0.0°</strong>
 </div>
+
 E no final da função calc() no JavaScript, adicione a linha para atualizar esse valor:JavaScriptdocument.getElementById('out_theta').innerText = (theta_rad * (180 / Math.PI)).toFixed(3) + '°';
+
 É uma métrica excelente para documentação técnica, pois os órgãos ambientais muitas vezes exigem a matriz completa (Largura Angular + Altura Angular) para validar se o cálculo de intrusão geométrica está correto.
 
 LOVABLE - AJUSTAR O FATOR DE REFRAÇÃO - MANTER O 1,13 E ADICIONAR O 1,17.
