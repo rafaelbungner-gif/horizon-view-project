@@ -36,6 +36,7 @@ const Index = () => {
             <MetricCard label="Oculto (m)" value={out.h_oculta.toFixed(1)} color="destructive" />
             <MetricCard label="Visível (m)" value={out.h_visivel.toFixed(1)} color={out.h_visivel > 0 ? "success" : "destructive"} />
             <MetricCard label="Ocup. Horizontal" value={`${out.alpha.toFixed(2)}°`} color="accent" />
+            <MetricCard label="Ocup. Vertical" value={`${out.theta.toFixed(3)}°`} color="accent" />
             <MetricCard label="Prob. Detecção" value={out.isVisible ? `${out.prob_pct.toFixed(1)}%` : "0.0%"} color={out.isVisible ? "accent" : "destructive"} />
           </div>
         </header>
@@ -70,7 +71,8 @@ const Index = () => {
                 className="bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
               >
                 <option value={1.00}>1.00 (Geometria Pura)</option>
-                <option value={1.13}>1.13 (Padrão/Marinho)</option>
+                <option value={1.13}>1.13 (Padrão Software GIS)</option>
+                <option value={1.17}>1.17 (Padrão NatureScot 2017)</option>
               </select>
             </div>
             <div className="flex flex-col gap-2">
