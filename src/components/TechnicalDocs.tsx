@@ -52,7 +52,8 @@ const TechnicalDocs = () => (
         <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de Refração Atmosférica (k)</h4>
         <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
           <li><strong className="text-foreground">k = 1,00:</strong> Geometria pura (vácuo).</li>
-          <li><strong className="text-foreground">k = 1,13:</strong> Padrão NatureScot (2017) para mapas ZTV.</li>
+          <li><strong className="text-foreground">k = 1,13:</strong> Padrão usado em softwares GIS (ESRI, QGIS) para análises ZTV.</li>
+          <li><strong className="text-foreground">k = 1,17:</strong> Padrão NatureScot (2017) — recomendado para representação visual de parques eólicos.</li>
         </ul>
       </DocCard>
       <DocCard accent="accent">
