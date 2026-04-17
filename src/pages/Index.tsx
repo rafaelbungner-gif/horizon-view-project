@@ -57,6 +57,8 @@ const Index = () => {
         {/* Vertical POV simulation (full width) */}
         <VerticalFOVCanvas
           theta={out.theta}
+          alpha={out.alpha}
+          largura_km={inputs.largura_km}
           h_visivel={out.h_visivel}
           h_oculta={out.h_oculta}
           h_turbina={inputs.h_turbina}
