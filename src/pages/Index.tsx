@@ -5,6 +5,7 @@ import MetricCard from "@/components/MetricCard";
 import ControlSlider from "@/components/ControlSlider";
 import FOVCanvas from "@/components/FOVCanvas";
 import ProfileCanvas from "@/components/ProfileCanvas";
+import VerticalFOVCanvas from "@/components/VerticalFOVCanvas";
 import TechnicalDocs from "@/components/TechnicalDocs";
 
 const Index = () => {
@@ -52,6 +53,16 @@ const Index = () => {
             isVisible={out.isVisible}
           />
         </div>
+
+        {/* Vertical POV simulation (full width) */}
+        <VerticalFOVCanvas
+          theta={out.theta}
+          h_visivel={out.h_visivel}
+          h_oculta={out.h_oculta}
+          h_turbina={inputs.h_turbina}
+          dist_km={inputs.dist_km}
+          isVisible={out.isVisible}
+        />
 
         {/* Controls */}
         <div className="bg-card border border-border rounded-lg p-6 panel-glow">
