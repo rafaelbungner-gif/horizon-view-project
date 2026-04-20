@@ -1,46 +1,39 @@
 
 
-## Plano: Adicionar largura do parque (α) à simulação POV vertical
+## Plano: Escala adaptativa das turbinas + reposicionar label θ
 
-Hoje o `VerticalFOVCanvas` desenha **uma única turbina** centralizada — mostra bem a altura angular θ, mas ignora a **extensão horizontal** do parque (α, que já é calculada e exibida no header).
+### 1. Turbinas que diminuem conforme largura do parque
 
-A ideia é representar visualmente **a fileira de turbinas** preenchendo o ângulo α dentro do mesmo painel POV, dando ao usuário a real percepção da magnitude paisagística.
+Hoje o desenho usa um tamanho mínimo de leitura fixo (`max(θ_px, 18px)`) idêntico para todas as N turbinas — por isso aparecem grandes e empilhadas mesmo quando a faixa α é estreita ou quando há muitas turbinas próximas.
 
-### O que muda no `VerticalFOVCanvas.tsx`
+Mudanças no `VerticalFOVCanvas.tsx`:
 
-1. **Nova prop**: `alpha` (ocupação horizontal em graus) e `largura_km` (já disponíveis no `Index.tsx`).
-2. **Régua angular horizontal** no topo da janela (-30° a +30° horizontais), espelhando a régua vertical lateral que já existe.
-3. **Faixa do parque**: uma região destacada no horizonte representando a largura angular α (em verde translúcido quando visível, cinza quando atenuado).
-4. **Múltiplas turbinas distribuídas**:
-   - Estimar nº de turbinas a desenhar: `N = clamp(round(largura_km / 1.0), 3, 15)` (espaçamento típico ~1 km entre turbinas offshore, limitado para não poluir).
-   - Distribuir uniformemente dentro da faixa angular α centrada no horizonte.
-   - Cada turbina herda a mesma altura angular θ e o mesmo desenho (torre + nacelle + pás giratórias).
-   - Turbinas das bordas ficam levemente mais transparentes (efeito de perspectiva atmosférica).
-5. **Indicador α** abaixo do horizonte: linha horizontal com setas marcando os limites do parque + label `α = X.XX°` e `largura ≈ Y km`.
-6. **Caso α > 60°** (parque maior que o FOV horizontal exibido): turbinas continuam até as bordas e aparece a marca "...continua além do FOV" nas extremidades.
-7. **Lupa de zoom**: continua funcionando, mas mostra apenas a turbina central (representativa).
-8. **Barra de rodapé**: adicionar segunda métrica — `Ocupação horizontal: X% do FOV` ao lado da vertical já existente.
+- **Calcular espaçamento real entre turbinas** em pixels:
+  `spacingPx = (alpha * pxPerDegH) / max(N - 1, 1)` (ou `viewW / N` se α = 0).
+- **Definir largura máxima permitida por turbina** baseada no espaçamento — para que pás de turbinas vizinhas não se sobreponham:
+  `maxTurbineWidth = spacingPx * 0.7` (deixa 30% de respiro entre elas).
+- **Calcular altura visual proporcional respeitando essa largura**:
+  - A largura atual da pá é `~0.4 * towerH * scale`. Inverte: `maxTowerH = maxTurbineWidth / 0.85` (considerando pás dos dois lados).
+  - `drawnPx = clamp(thetaPx, minLeitura, maxTowerH)`.
+- **Reduzir o mínimo de leitura quando há muitas turbinas**: `minLeitura = clamp(spacingPx * 0.35, 6, 18)` — assim, quando o espaçamento é apertado, o mínimo encolhe para 6px (ainda perceptível mas não atropela vizinhos).
+- **Resultado**: parques largos com muitas turbinas terão silhuetas menores e mais densas (efeito visual de "fileira distante"); parques estreitos com poucas turbinas mantêm tamanho de leitura confortável.
 
-### Layout do painel (ASCII)
+### 2. Reposicionar o indicador θ
 
-```text
-┌──────────────────────────────────────────────┐
-│ -30°  -20°  -10°   0°   +10°  +20°  +30° (H) │
-│ ┌──────────────────────────────────────────┐ │
-│+30°│        CÉU                            │ │
-│    │                                       │ │
-│ 0° │ ▲  ▲  ▲  ▲  ▲  ▲  ▲ ──── horizonte ── │ │
-│    │ │  │  │  │  │  │  │   ←─── α ───→     │ │
-│-30°│        MAR                            │ │
-│    └──────────────────────────────────────┘ │
-│ Vertical: 0.003% | Horizontal: 12.5% do FOV │
-└──────────────────────────────────────────────┘
-```
+Hoje o label "θ = X.XXX°" fica ancorado na turbina central (`centerX + 30`), sobrepondo turbinas vizinhas conforme visto na imagem.
+
+Mudanças:
+
+- Mover a **medição de θ (linha + setas + label)** para o **canto superior esquerdo** do painel POV, dentro da viewport, como uma "legenda flutuante":
+  - Ancorar em `(marginL + 12, marginT + 12)`.
+  - Desenhar uma mini-régua vertical com a altura proporcional a `drawnPx` (mesma escala visual da turbina), com setas em ambas as extremidades.
+  - Label `θ = X.XXX°` ao lado da régua.
+  - Adicionar um leve fundo escuro semi-transparente (`hsla(215, 50%, 12%, 0.75)`) com padding 6px e cantos arredondados para legibilidade sobre o céu.
+  - Manter a observação `(escala mín. p/ leitura)` dentro do mesmo bloco quando aplicável.
+- Remover a antiga indicação θ ao lado da turbina central — fica apenas a legenda no canto.
+- A "lupa de zoom 20×" continua no canto inferior direito (sem mudança).
 
 ### Arquivos modificados
 
-1. **`src/components/VerticalFOVCanvas.tsx`** — adicionar props `alpha` e `largura_km`; nova régua horizontal; loop desenhando N turbinas; indicador da largura α; segunda métrica no rodapé.
-2. **`src/pages/Index.tsx`** — passar `alpha={out.alpha}` e `largura_km={inputs.largura_km}` para `VerticalFOVCanvas`.
-
-Sem alterações em `calculations.ts` — apenas nova representação visual de variáveis já calculadas.
+- **`src/components/VerticalFOVCanvas.tsx`** — única alteração; nenhuma mudança de props ou em `Index.tsx`.
 
