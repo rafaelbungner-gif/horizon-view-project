@@ -253,32 +253,74 @@ const VerticalFOVCanvas = ({
           }
         });
 
-        // Indicador θ (na turbina central)
+        // Indicador θ — legenda flutuante no canto superior esquerdo
+        const legendPad = 8;
+        const legendBarH = Math.max(drawnPx, 14);
+        const legendLabel = `θ = ${theta.toFixed(3)}°`;
+        const showMinNote = drawnPx > thetaPx + 1;
+        const minNote = "(escala mín. p/ leitura)";
+
+        ctx.font = "bold 11px Inter, sans-serif";
+        const labelW = ctx.measureText(legendLabel).width;
+        ctx.font = "9px Inter, sans-serif";
+        const noteW = showMinNote ? ctx.measureText(minNote).width : 0;
+        const textW = Math.max(labelW, noteW);
+
+        const legendX = marginL + 12;
+        const legendTop = marginT + 12;
+        const legendBarX = legendX + legendPad;
+        const legendBarTop = legendTop + legendPad;
+        const legendBarBottom = legendBarTop + legendBarH;
+        const boxW = legendPad * 2 + 14 + textW + 4;
+        const boxH = legendPad * 2 + legendBarH + (showMinNote ? 12 : 0);
+
+        // Fundo arredondado
+        ctx.fillStyle = "hsla(215, 50%, 12%, 0.78)";
+        const r = 6;
+        ctx.beginPath();
+        ctx.moveTo(legendX + r, legendTop);
+        ctx.lineTo(legendX + boxW - r, legendTop);
+        ctx.quadraticCurveTo(legendX + boxW, legendTop, legendX + boxW, legendTop + r);
+        ctx.lineTo(legendX + boxW, legendTop + boxH - r);
+        ctx.quadraticCurveTo(legendX + boxW, legendTop + boxH, legendX + boxW - r, legendTop + boxH);
+        ctx.lineTo(legendX + r, legendTop + boxH);
+        ctx.quadraticCurveTo(legendX, legendTop + boxH, legendX, legendTop + boxH - r);
+        ctx.lineTo(legendX, legendTop + r);
+        ctx.quadraticCurveTo(legendX, legendTop, legendX + r, legendTop);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "hsla(142, 71%, 60%, 0.4)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Mini-régua vertical com setas
         ctx.strokeStyle = "hsl(142 71% 75%)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(centerX + 22, horizonY);
-        ctx.lineTo(centerX + 22, horizonY - drawnPx);
+        ctx.moveTo(legendBarX, legendBarTop);
+        ctx.lineTo(legendBarX, legendBarBottom);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(centerX + 18, horizonY - 4);
-        ctx.lineTo(centerX + 22, horizonY);
-        ctx.lineTo(centerX + 26, horizonY - 4);
-        ctx.moveTo(centerX + 18, horizonY - drawnPx + 4);
-        ctx.lineTo(centerX + 22, horizonY - drawnPx);
-        ctx.lineTo(centerX + 26, horizonY - drawnPx + 4);
+        ctx.moveTo(legendBarX - 4, legendBarTop + 4);
+        ctx.lineTo(legendBarX, legendBarTop);
+        ctx.lineTo(legendBarX + 4, legendBarTop + 4);
+        ctx.moveTo(legendBarX - 4, legendBarBottom - 4);
+        ctx.lineTo(legendBarX, legendBarBottom);
+        ctx.lineTo(legendBarX + 4, legendBarBottom - 4);
         ctx.stroke();
 
-        ctx.fillStyle = "hsl(142 71% 75%)";
+        // Label
+        ctx.fillStyle = "hsl(142 71% 80%)";
         ctx.font = "bold 11px Inter, sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(`θ = ${theta.toFixed(3)}°`, centerX + 30, horizonY - drawnPx / 2);
+        ctx.fillText(legendLabel, legendBarX + 8, legendBarTop + legendBarH / 2);
 
-        if (drawnPx > thetaPx + 1) {
-          ctx.fillStyle = "hsl(240 4% 55%)";
+        if (showMinNote) {
+          ctx.fillStyle = "hsl(240 4% 65%)";
           ctx.font = "9px Inter, sans-serif";
-          ctx.fillText("(escala mín. p/ leitura)", centerX + 30, horizonY - drawnPx - 6);
+          ctx.textBaseline = "top";
+          ctx.fillText(minNote, legendX + legendPad, legendBarBottom + 2);
         }
       }
 
