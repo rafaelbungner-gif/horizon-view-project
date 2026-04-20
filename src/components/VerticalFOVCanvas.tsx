@@ -207,30 +207,56 @@ const VerticalFOVCanvas = ({
       // ===== Múltiplas turbinas distribuídas em α
       const thetaPx = theta * pxPerDegV;
 
-      // Nº de turbinas baseado na largura do parque (~1 km de espaçamento típico)
-      const N = Math.max(3, Math.min(15, Math.round(largura_km / 1.0)));
+      // Espaçamento offshore típico (km) entre turbinas — ajustado p/ parques modernos
+      const espacamentoKm = 1.2;
+      // Nº fracionário de turbinas baseado na largura — usado p/ fade-in suave dos extremos
+      const Nfrac = Math.max(2, Math.min(15, largura_km / espacamentoKm));
+      const NfracClamped = Nfrac;
+      const Nfloor = Math.max(2, Math.floor(NfracClamped));
+      const fadeFrac = Math.min(1, Math.max(0, NfracClamped - Nfloor)); // 0..1
+      // Nº efetivo desenhado: Nfloor + 2 extras (um em cada ponta) com fade
+      const hasFadeExtras = fadeFrac > 0.001 && Nfloor < 15;
+      const N = hasFadeExtras ? Nfloor + 2 : Nfloor;
 
       // Espaçamento real entre turbinas (px) e escala adaptativa
       const alphaPxForSpacing = alpha > 0 ? alpha * pxPerDegH : viewW;
       const spacingPx = alphaPxForSpacing / Math.max(N - 1, 1);
-      // Mínimo de leitura encolhe quando turbinas estão apertadas
+      // Mínimo de leitura encolhe quando turbinas estão apertadas (smooth)
       const minLeitura = Math.max(6, Math.min(18, spacingPx * 0.35));
       // Largura máxima por turbina deixa 30% de respiro entre vizinhas
       const maxTurbineWidth = spacingPx * 0.7;
       // Pás ocupam ~0.4 * towerH de cada lado → largura total ~0.85 * towerH
-      const maxTowerH = Math.max(minLeitura, maxTurbineWidth / 0.85);
-      const drawnPx = Math.min(Math.max(thetaPx, minLeitura), maxTowerH);
+      const maxTowerHraw = maxTurbineWidth / 0.85;
+      const maxTowerH = Math.max(minLeitura, maxTowerHraw);
+      // Smoothstep para suavizar a interpolação entre min e max conforme thetaPx cresce
+      const smoothstep = (edge0: number, edge1: number, x: number) => {
+        if (edge1 <= edge0) return x >= edge1 ? 1 : 0;
+        const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      };
+      // Interpolação suave: quando thetaPx está entre min e max, evita salto duro
+      const tSmooth = smoothstep(minLeitura * 0.5, maxTowerH, thetaPx);
+      const drawnPx = minLeitura + (maxTowerH - minLeitura) * tSmooth;
 
       // Distribui dentro da faixa angular α; se overflow, ainda assim posiciona
       // dentro da viewport (alguns ficarão clipados nas bordas).
+      // positions[i] + opacityMul[i] permitem fade nas pontas
       const positions: number[] = [];
+      const opacityMul: number[] = [];
       if (N === 1) {
         positions.push(centerX);
+        opacityMul.push(1);
       } else {
         for (let i = 0; i < N; i++) {
           const t = i / (N - 1); // 0..1
           const deg = -alpha / 2 + t * alpha;
           positions.push(centerX + deg * pxPerDegH);
+          // turbinas extras (primeira e última) recebem fade proporcional a fadeFrac
+          if (hasFadeExtras && (i === 0 || i === N - 1)) {
+            opacityMul.push(fadeFrac);
+          } else {
+            opacityMul.push(1);
+          }
         }
       }
 
@@ -240,12 +266,14 @@ const VerticalFOVCanvas = ({
       const hiddenPx = Math.min(hiddenDeg * pxPerDegV, viewH / 2 - 4);
 
       if (theta > 0 && h_visivel > 0) {
-        positions.forEach((x) => {
+        positions.forEach((x, i) => {
           // perspectiva atmosférica: turbinas das bordas mais transparentes
           const distFromCenter = Math.abs(x - centerX) / (viewW / 2);
-          const a = 1 - Math.min(distFromCenter * 0.4, 0.4);
+          const aBase = 1 - Math.min(distFromCenter * 0.4, 0.4);
+          const a = aBase * opacityMul[i];
           // só desenha se estiver visível na viewport
           if (x < marginL - 20 || x > marginL + viewW + 20) return;
+          if (a < 0.02) return;
           drawTurbine(x, horizonY, horizonY - drawnPx, { alpha: a });
 
           if (h_oculta > 0 && hiddenPx > 1) {
@@ -253,29 +281,50 @@ const VerticalFOVCanvas = ({
           }
         });
 
-        // Indicador θ — legenda flutuante no canto superior esquerdo
+        // ===== Legenda flutuante (canto superior esquerdo) — θ + α + área visível
         const legendPad = 8;
         const legendBarH = Math.max(drawnPx, 14);
-        const legendLabel = `θ = ${theta.toFixed(3)}°`;
+        const labelTheta = `θ = ${theta.toFixed(3)}°`;
+        const labelAlpha = `α = ${alpha.toFixed(2)}°`;
+        const labelArea = `Área visível: ${h_visivel.toFixed(1)} m × ${largura_km.toFixed(1)} km`;
         const showMinNote = drawnPx > thetaPx + 1;
         const minNote = "(escala mín. p/ leitura)";
 
+        // Medições
         ctx.font = "bold 11px Inter, sans-serif";
-        const labelW = ctx.measureText(legendLabel).width;
+        const wTheta = ctx.measureText(labelTheta).width;
+        ctx.font = "10px Inter, sans-serif";
+        const wAlpha = ctx.measureText(labelAlpha).width;
         ctx.font = "9px Inter, sans-serif";
-        const noteW = showMinNote ? ctx.measureText(minNote).width : 0;
-        const textW = Math.max(labelW, noteW);
+        const wArea = ctx.measureText(labelArea).width;
+        const wNote = showMinNote ? ctx.measureText(minNote).width : 0;
+        const textW = Math.max(wTheta, wAlpha, wArea, wNote);
 
         const legendX = marginL + 12;
         const legendTop = marginT + 12;
         const legendBarX = legendX + legendPad;
         const legendBarTop = legendTop + legendPad;
         const legendBarBottom = legendBarTop + legendBarH;
-        const boxW = legendPad * 2 + 14 + textW + 4;
-        const boxH = legendPad * 2 + legendBarH + (showMinNote ? 12 : 0);
+
+        // Mini-régua horizontal abaixo da θ — proporção visual de α (até 60° = barW)
+        const miniAlphaW = 56;
+        const miniAlphaFill = Math.min(1, alpha / FOV_HORIZONTAL) * miniAlphaW;
+
+        const boxW = legendPad * 2 + 14 + textW + 8;
+        const lineGap = 4;
+        const alphaRulerH = 8;
+        const boxH =
+          legendPad * 2 +
+          legendBarH +
+          lineGap +
+          12 + // alpha label line
+          alphaRulerH +
+          lineGap +
+          12 + // area line
+          (showMinNote ? 12 : 0);
 
         // Fundo arredondado
-        ctx.fillStyle = "hsla(215, 50%, 12%, 0.78)";
+        ctx.fillStyle = "hsla(215, 50%, 12%, 0.82)";
         const r = 6;
         ctx.beginPath();
         ctx.moveTo(legendX + r, legendTop);
@@ -293,7 +342,7 @@ const VerticalFOVCanvas = ({
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Mini-régua vertical com setas
+        // Mini-régua vertical (θ) com setas
         ctx.strokeStyle = "hsl(142 71% 75%)";
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -309,19 +358,76 @@ const VerticalFOVCanvas = ({
         ctx.lineTo(legendBarX + 4, legendBarBottom - 4);
         ctx.stroke();
 
-        // Label
+        // Label θ
         ctx.fillStyle = "hsl(142 71% 80%)";
         ctx.font = "bold 11px Inter, sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(legendLabel, legendBarX + 8, legendBarTop + legendBarH / 2);
+        ctx.fillText(labelTheta, legendBarX + 8, legendBarTop + legendBarH / 2);
+
+        // Linha α (label + mini-régua horizontal)
+        let cursorY = legendBarBottom + lineGap;
+        ctx.fillStyle = "hsl(142 71% 80%)";
+        ctx.font = "10px Inter, sans-serif";
+        ctx.textBaseline = "top";
+        ctx.fillText(labelAlpha, legendX + legendPad, cursorY);
+        cursorY += 12;
+
+        // mini-régua horizontal α
+        const miniAlphaX = legendX + legendPad;
+        const miniAlphaY = cursorY + 2;
+        ctx.fillStyle = "hsl(240 4% 22%)";
+        ctx.fillRect(miniAlphaX, miniAlphaY, miniAlphaW, alphaRulerH - 4);
+        ctx.fillStyle = isVisible ? "hsl(142 71% 60%)" : "hsl(240 5% 60%)";
+        ctx.fillRect(miniAlphaX, miniAlphaY, miniAlphaFill, alphaRulerH - 4);
+        ctx.strokeStyle = "hsl(240 4% 40%)";
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(miniAlphaX, miniAlphaY, miniAlphaW, alphaRulerH - 4);
+        cursorY += alphaRulerH + lineGap;
+
+        // Linha área visível
+        ctx.fillStyle = "hsl(142 71% 80%)";
+        ctx.font = "9px Inter, sans-serif";
+        ctx.textBaseline = "top";
+        ctx.fillText(labelArea, legendX + legendPad, cursorY);
+        cursorY += 12;
 
         if (showMinNote) {
           ctx.fillStyle = "hsl(240 4% 65%)";
           ctx.font = "9px Inter, sans-serif";
-          ctx.textBaseline = "top";
-          ctx.fillText(minNote, legendX + legendPad, legendBarBottom + 2);
+          ctx.fillText(minNote, legendX + legendPad, cursorY);
         }
+      } else if (h_visivel <= 0) {
+        // Legenda compacta indicando 100% oculta
+        const legendX = marginL + 12;
+        const legendTop = marginT + 12;
+        const boxW = 180;
+        const boxH = 44;
+        ctx.fillStyle = "hsla(215, 50%, 12%, 0.82)";
+        const r = 6;
+        ctx.beginPath();
+        ctx.moveTo(legendX + r, legendTop);
+        ctx.lineTo(legendX + boxW - r, legendTop);
+        ctx.quadraticCurveTo(legendX + boxW, legendTop, legendX + boxW, legendTop + r);
+        ctx.lineTo(legendX + boxW, legendTop + boxH - r);
+        ctx.quadraticCurveTo(legendX + boxW, legendTop + boxH, legendX + boxW - r, legendTop + boxH);
+        ctx.lineTo(legendX + r, legendTop + boxH);
+        ctx.quadraticCurveTo(legendX, legendTop + boxH, legendX, legendTop + boxH - r);
+        ctx.lineTo(legendX, legendTop + r);
+        ctx.quadraticCurveTo(legendX, legendTop, legendX + r, legendTop);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "hsla(0, 72%, 63%, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "hsl(0 72% 70%)";
+        ctx.font = "bold 11px Inter, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText("Área visível: 100% oculta", legendX + 10, legendTop + 8);
+        ctx.fillStyle = "hsl(240 4% 65%)";
+        ctx.font = "9px Inter, sans-serif";
+        ctx.fillText(`α = ${alpha.toFixed(2)}° · ${largura_km.toFixed(1)} km`, legendX + 10, legendTop + 24);
       }
 
       // ===== Indicador α (abaixo do horizonte)
