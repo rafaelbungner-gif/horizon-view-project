@@ -205,11 +205,20 @@ const VerticalFOVCanvas = ({
 
       // ===== Múltiplas turbinas distribuídas em α
       const thetaPx = theta * pxPerDegV;
-      const minVisualPx = 18;
-      const drawnPx = Math.max(thetaPx, minVisualPx);
 
       // Nº de turbinas baseado na largura do parque (~1 km de espaçamento típico)
       const N = Math.max(3, Math.min(15, Math.round(largura_km / 1.0)));
+
+      // Espaçamento real entre turbinas (px) e escala adaptativa
+      const alphaPxForSpacing = alpha > 0 ? alpha * pxPerDegH : viewW;
+      const spacingPx = alphaPxForSpacing / Math.max(N - 1, 1);
+      // Mínimo de leitura encolhe quando turbinas estão apertadas
+      const minLeitura = Math.max(6, Math.min(18, spacingPx * 0.35));
+      // Largura máxima por turbina deixa 30% de respiro entre vizinhas
+      const maxTurbineWidth = spacingPx * 0.7;
+      // Pás ocupam ~0.4 * towerH de cada lado → largura total ~0.85 * towerH
+      const maxTowerH = Math.max(minLeitura, maxTurbineWidth / 0.85);
+      const drawnPx = Math.min(Math.max(thetaPx, minLeitura), maxTowerH);
 
       // Distribui dentro da faixa angular α; se overflow, ainda assim posiciona
       // dentro da viewport (alguns ficarão clipados nas bordas).
