@@ -145,7 +145,8 @@ const VerticalFOVCanvas = ({
         ? "hsla(142, 71%, 60%, 0.10)"
         : "hsla(240, 5%, 60%, 0.10)";
       ctx.fillStyle = bandColor;
-      const bandTop = horizonY - Math.max(theta * pxPerDegV, 24) - 6;
+      const previewThetaPx = Math.max(theta * pxPerDegV, 12);
+      const bandTop = horizonY - previewThetaPx - 6;
       const bandH = horizonY - bandTop;
       ctx.fillRect(parkLeft, bandTop, parkRight - parkLeft, bandH);
 
