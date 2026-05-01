@@ -21,44 +21,82 @@ export interface CalcOutputs {
   horizonte_obs: number;
 }
 
-const R_TERRA = 6371000;
+export const EARTH_RADIUS_M = 6_371_000;
+export const CONTRAST_THRESHOLD_PCT = 2.0;
+export const ROTOR_MOTION_AREA_FACTOR = 1.2;
+
+const DEG_PER_RAD = 180 / Math.PI;
+const ARC_MINUTES_PER_DEGREE = 60;
+
+function assertFiniteNumber(name: keyof CalcInputs, value: number) {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${name} must be a finite number.`);
+  }
+}
+
+function assertNonNegative(name: keyof CalcInputs, value: number) {
+  assertFiniteNumber(name, value);
+  if (value < 0) {
+    throw new RangeError(`${name} must be greater than or equal to zero.`);
+  }
+}
+
+function assertPositive(name: keyof CalcInputs, value: number) {
+  assertFiniteNumber(name, value);
+  if (value <= 0) {
+    throw new RangeError(`${name} must be greater than zero.`);
+  }
+}
+
+function validateInputs(inputs: CalcInputs) {
+  assertPositive("dist_km", inputs.dist_km);
+  assertNonNegative("h_turbina", inputs.h_turbina);
+  assertNonNegative("h_obs", inputs.h_obs);
+  assertNonNegative("largura_km", inputs.largura_km);
+  assertNonNegative("area", inputs.area);
+  assertNonNegative("ci", inputs.ci);
+  assertPositive("k", inputs.k);
+  assertNonNegative("beta", inputs.beta);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 export function calculate(inputs: CalcInputs): CalcOutputs {
+  validateInputs(inputs);
+
   const { dist_km, h_turbina, h_obs, largura_km, area, ci, k, beta } = inputs;
   const dist_m = dist_km * 1000;
   const largura_m = largura_km * 1000;
+  const effectiveEarthRadius = EARTH_RADIUS_M * k;
 
-  // PASSO 1: Filtragem Topográfica
-  const horizonte_obs = Math.sqrt(2 * k * R_TERRA * h_obs);
-  let h_oculta = 0;
-  if (dist_m > horizonte_obs) {
-    h_oculta = Math.pow(dist_m - horizonte_obs, 2) / (2 * R_TERRA * k);
-  }
-  h_oculta = Math.min(h_oculta, h_turbina);
+  // Curvature is approximated with an effective Earth radius that includes refraction.
+  const horizonte_obs = Math.sqrt(2 * effectiveEarthRadius * h_obs);
+  const distanceBeyondHorizon = Math.max(0, dist_m - horizonte_obs);
+  const rawHiddenHeight = Math.pow(distanceBeyondHorizon, 2) / (2 * effectiveEarthRadius);
+  const h_oculta = clamp(rawHiddenHeight, 0, h_turbina);
   const h_visivel = Math.max(0, h_turbina - h_oculta);
 
-  // PASSO 2: Dissolução Atmosférica
   const cd = ci * Math.exp(-beta * dist_m);
-  const atmosfera_permite = cd >= 2.0;
+  const atmosfera_permite = cd + 1e-12 >= CONTRAST_THRESHOLD_PCT;
   const isVisible = h_visivel > 0 && atmosfera_permite;
 
-  // PASSO 3: Magnitude Paisagística (SVIA)
   let alpha = 0;
   let theta = 0;
   if (h_visivel > 0) {
-    alpha = 2 * Math.atan(largura_m / (2 * dist_m)) * (180 / Math.PI);
-    theta = Math.atan(h_visivel / dist_m) * (180 / Math.PI);
+    alpha = 2 * Math.atan(largura_m / (2 * dist_m)) * DEG_PER_RAD;
+    theta = Math.atan(h_visivel / dist_m) * DEG_PER_RAD;
   }
 
-  // PASSO 4: Probabilidade (Bishop 2002)
   let prob_pct = 0;
-  if (isVisible) {
-    const M = area * 1.2;
-    const angulo_minutos = Math.atan(1 / dist_m) * (180 / Math.PI) * 60;
-    const S = M * Math.pow(angulo_minutos, 2);
-    const Z_ud = -16.02 + 0.0124 * (cd * S) + 12.75;
-    const prob = 1 / (1 + Math.exp(-Z_ud));
-    prob_pct = prob * 100;
+  if (isVisible && area > 0 && cd > 0) {
+    const perceivedArea = area * ROTOR_MOTION_AREA_FACTOR;
+    const oneMeterAngularMinutes = Math.atan(1 / dist_m) * DEG_PER_RAD * ARC_MINUTES_PER_DEGREE;
+    const visualMagnitude = perceivedArea * Math.pow(oneMeterAngularMinutes, 2);
+    const logit = -16.02 + 0.0124 * (cd * visualMagnitude) + 12.75;
+    const probability = 1 / (1 + Math.exp(-logit));
+    prob_pct = clamp(probability * 100, 0, 100);
   }
 
   return { h_oculta, h_visivel, alpha, theta, prob_pct, cd, isVisible, atmosfera_permite, horizonte_obs };
