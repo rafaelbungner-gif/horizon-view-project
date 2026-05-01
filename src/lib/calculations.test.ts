@@ -49,6 +49,7 @@ describe("calculate", () => {
     expect(refracted.horizonte_obs).toBeGreaterThan(pureGeometry.horizonte_obs);
     expect(refracted.h_oculta).toBeLessThan(pureGeometry.h_oculta);
     expect(refracted.h_visivel).toBeGreaterThan(pureGeometry.h_visivel);
+    expect(refracted.distancia_geometrica_max_km).toBeGreaterThan(pureGeometry.distancia_geometrica_max_km);
   });
 
   it("applies atmospheric attenuation beta before marking the turbine visible", () => {
@@ -58,10 +59,19 @@ describe("calculate", () => {
     expect(clearAir.cd).toBeCloseTo(35, 6);
     expect(clearAir.atmosfera_permite).toBe(true);
     expect(clearAir.isVisible).toBe(true);
+    expect(clearAir.visibilityReason).toBe("visible");
     expect(denseHaze.h_visivel).toBeGreaterThan(0);
     expect(denseHaze.cd).toBeLessThan(CONTRAST_THRESHOLD_PCT);
     expect(denseHaze.atmosfera_permite).toBe(false);
     expect(denseHaze.isVisible).toBe(false);
+    expect(denseHaze.visibilityReason).toBe("blocked_by_atmosphere");
+  });
+
+  it("calculates the atmospheric distance limit from beta and initial contrast", () => {
+    const out = calculate(makeInputs({ ci: 35, beta: 0.00008 }));
+    const expectedKm = Math.log(35 / CONTRAST_THRESHOLD_PCT) / 0.00008 / 1000;
+
+    expect(out.distancia_atmosferica_max_km).toBeCloseTo(expectedKm, 6);
   });
 
   it("treats the contrast threshold as visible at the boundary", () => {
@@ -88,6 +98,7 @@ describe("calculate", () => {
     expect(out.theta).toBe(0);
     expect(out.prob_pct).toBe(0);
     expect(out.isVisible).toBe(false);
+    expect(out.visibilityReason).toBe("hidden_by_horizon");
   });
 
   it("allows zero-width or zero-height edge cases without producing NaN", () => {
@@ -97,6 +108,7 @@ describe("calculate", () => {
     expect(out.h_visivel).toBe(0);
     expect(out.alpha).toBe(0);
     expect(out.theta).toBe(0);
+    expect(out.visibilityReason).toBe("no_structure");
     expect(Number.isFinite(out.cd)).toBe(true);
   });
 
