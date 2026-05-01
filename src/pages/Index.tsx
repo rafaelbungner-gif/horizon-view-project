@@ -8,45 +8,17 @@ import ProfileCanvas from "@/components/ProfileCanvas";
 import VerticalFOVCanvas from "@/components/VerticalFOVCanvas";
 import TechnicalDocs from "@/components/TechnicalDocs";
 
-interface ScenarioPreset {
-  id: string;
-  name: string;
-  description: string;
-  inputs: CalcInputs;
-}
-
-const SCENARIO_PRESETS: ScenarioPreset[] = [
-  {
-    id: "praia",
-    name: "Praia",
-    description: "Observador quase ao nível do mar, mais sensível à curvatura.",
-    inputs: { dist_km: 15, h_turbina: 260, h_obs: 2, largura_km: 10, area: 1500, ci: 35, k: 1.13, beta: 0.00008 },
-  },
-  {
-    id: "mirante",
-    name: "Mirante",
-    description: "Ponto elevado em falésia ou morro costeiro.",
-    inputs: { dist_km: 45, h_turbina: 260, h_obs: 80, largura_km: 14, area: 1500, ci: 35, k: 1.13, beta: 0.00004 },
-  },
-  {
-    id: "predio-alto",
-    name: "Prédio alto",
-    description: "Observação urbana elevada, com horizonte mais distante.",
-    inputs: { dist_km: 60, h_turbina: 300, h_obs: 120, largura_km: 18, area: 1700, ci: 32, k: 1.17, beta: 0.00004 },
-  },
-  {
-    id: "ar-limpo",
-    name: "Ar limpo",
-    description: "Mesma geometria base, com menor extinção atmosférica.",
-    inputs: { dist_km: 35, h_turbina: 260, h_obs: 10, largura_km: 12, area: 1500, ci: 35, k: 1.13, beta: 0.00004 },
-  },
-  {
-    id: "nevoa-leve",
-    name: "Névoa leve",
-    description: "Cenário Bishop de névoa leve para testar perda de contraste.",
-    inputs: { dist_km: 35, h_turbina: 260, h_obs: 10, largura_km: 12, area: 1500, ci: 35, k: 1.13, beta: 0.00008 },
-  },
-];
+const DEFAULT_INPUTS: CalcInputs = {
+  dist_km: 35,
+  h_turbina: 260,
+  h_obs: 10,
+  largura_km: 12,
+  num_turbinas: 9,
+  area: 1500,
+  ci: 35,
+  k: 1.13,
+  beta: 0.00004,
+};
 
 const VISIBILITY_COPY: Record<VisibilityReason, { title: string; body: string; badge: string }> = {
   visible: {
@@ -83,7 +55,6 @@ const LIMITING_FACTOR_COPY: Record<LimitingFactor, string> = {
   none: "Sem limitante dominante",
 };
 
-const cloneInputs = (inputs: CalcInputs): CalcInputs => ({ ...inputs });
 const formatPct = (value: number) => `${value.toFixed(1)}%`;
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -103,10 +74,10 @@ const getAtmosphericTransmission = (inputs: CalcInputs, out: CalcOutputs) => {
   return clamp01(out.cd / inputs.ci);
 };
 
-const buildScenarioLines = (label: string, inputs: CalcInputs, out: CalcOutputs) => [
-  `${label}`,
+const buildScenarioLines = (inputs: CalcInputs, out: CalcOutputs) => [
   `Diagnóstico: ${VISIBILITY_COPY[out.visibilityReason].title}`,
   `Distância: ${inputs.dist_km.toFixed(1)} km | Observador: ${inputs.h_obs.toFixed(1)} m | Turbina: ${inputs.h_turbina.toFixed(1)} m`,
+  `Largura: ${inputs.largura_km.toFixed(1)} km | Turbinas: ${inputs.num_turbinas} | Espaçamento: ${out.distancia_entre_turbinas_km.toFixed(2)} km`,
   `Visível: ${out.h_visivel.toFixed(1)} m | Oculto: ${out.h_oculta.toFixed(1)} m`,
   `Ângulos: α ${out.alpha.toFixed(2)}° | θ real ${out.theta.toFixed(4)}° | θ geom ${out.theta_aproximado.toFixed(4)}°`,
   `Depressão do horizonte: ${out.depressao_horizonte_deg.toFixed(4)}° | Prob.: ${formatPct(out.prob_pct)}`,
@@ -150,10 +121,10 @@ const drawWrappedText = (
   return cursorY + lineHeight;
 };
 
-const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs, compareInputs: CalcInputs, compareOut: CalcOutputs) => {
+const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs) => {
   const canvas = document.createElement("canvas");
-  canvas.width = 1400;
-  canvas.height = 900;
+  canvas.width = 1200;
+  canvas.height = 820;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -172,23 +143,15 @@ const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs, compareInputs:
   ctx.fillStyle = "#aac0d6";
   ctx.fillText(new Date().toLocaleString("pt-BR"), 84, 148);
 
-  const sections = [
-    buildScenarioLines("CENÁRIO A - ATUAL", inputs, out),
-    buildScenarioLines("CENÁRIO B - COMPARAÇÃO", compareInputs, compareOut),
-  ];
-
-  sections.forEach((lines, sectionIndex) => {
-    const x = sectionIndex === 0 ? 84 : 720;
-    let y = 220;
-    ctx.fillStyle = sectionIndex === 0 ? "#7dd3fc" : "#a7f3d0";
-    ctx.font = "bold 24px Arial";
-    ctx.fillText(lines[0], x, y);
-    y += 46;
-    ctx.fillStyle = "#f4f7fb";
-    ctx.font = "20px Arial";
-    lines.slice(1).forEach((line) => {
-      y = drawWrappedText(ctx, line, x, y, 560, 28) + 8;
-    });
+  let y = 220;
+  ctx.fillStyle = "#7dd3fc";
+  ctx.font = "bold 24px Arial";
+  ctx.fillText("CENÁRIO ATUAL", 84, y);
+  y += 46;
+  ctx.fillStyle = "#f4f7fb";
+  ctx.font = "20px Arial";
+  buildScenarioLines(inputs, out).forEach((line) => {
+    y = drawWrappedText(ctx, line, 84, y, 980, 30) + 10;
   });
 
   const link = document.createElement("a");
@@ -197,13 +160,8 @@ const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs, compareInputs:
   link.click();
 };
 
-const printSummaryPdf = (inputs: CalcInputs, out: CalcOutputs, compareInputs: CalcInputs, compareOut: CalcOutputs) => {
-  const allLines = [
-    ...buildScenarioLines("Cenário A - Atual", inputs, out),
-    "",
-    ...buildScenarioLines("Cenário B - Comparação", compareInputs, compareOut),
-  ];
-  const body = allLines.map((line) => (line ? `<p>${escapeHtml(line)}</p>` : "<hr />")).join("");
+const printSummaryPdf = (inputs: CalcInputs, out: CalcOutputs) => {
+  const body = buildScenarioLines(inputs, out).map((line) => `<p>${escapeHtml(line)}</p>`).join("");
   const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
 
   if (!printWindow) {
@@ -221,7 +179,6 @@ const printSummaryPdf = (inputs: CalcInputs, out: CalcOutputs, compareInputs: Ca
           body { font-family: Arial, sans-serif; color: #122033; margin: 40px; line-height: 1.45; }
           h1 { color: #0f5f8f; }
           p { margin: 8px 0; }
-          hr { border: 0; border-top: 1px solid #ccd8e3; margin: 24px 0; }
         </style>
       </head>
       <body>
@@ -236,40 +193,14 @@ const printSummaryPdf = (inputs: CalcInputs, out: CalcOutputs, compareInputs: Ca
   window.setTimeout(() => printWindow.print(), 250);
 };
 
-const ScenarioSummary = ({ title, inputs, out }: { title: string; inputs: CalcInputs; out: CalcOutputs }) => {
-  const copy = VISIBILITY_COPY[out.visibilityReason];
-  const transmission = getAtmosphericTransmission(inputs, out);
-
-  return (
-    <div className="rounded-lg border border-border bg-secondary/35 p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">{title}</h3>
-          <p className="text-xs text-muted-foreground">{inputs.dist_km.toFixed(1)} km · observador {inputs.h_obs.toFixed(1)} m · β {inputs.beta.toFixed(5)}</p>
-        </div>
-        <span className={`rounded-full border px-2 py-1 text-[0.65rem] font-bold uppercase ${copy.badge}`}>{copy.title}</span>
-      </div>
-      <p className="text-xs text-muted-foreground">{copy.body}</p>
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <span className="rounded bg-background/50 p-2">Visível: <strong className="text-foreground">{out.h_visivel.toFixed(1)} m</strong></span>
-        <span className="rounded bg-background/50 p-2">Transmissão: <strong className="text-foreground">{formatPct(transmission * 100)}</strong></span>
-        <span className="rounded bg-background/50 p-2">θ real: <strong className="text-foreground">{out.theta.toFixed(4)}°</strong></span>
-        <span className="rounded bg-background/50 p-2">Atmos.: <strong className="text-foreground">{formatAtmosphericKm(out.distancia_atmosferica_max_km)}</strong></span>
-      </div>
-    </div>
-  );
-};
-
 const Index = () => {
-  const [inputs, setInputs] = useState<CalcInputs>(() => cloneInputs(SCENARIO_PRESETS[0].inputs));
-  const [compareInputs, setCompareInputs] = useState<CalcInputs>(() => cloneInputs(SCENARIO_PRESETS[1].inputs));
+  const [inputs, setInputs] = useState<CalcInputs>(DEFAULT_INPUTS);
   const [animateCanvases, setAnimateCanvases] = useState(false);
 
   const set = (key: keyof CalcInputs) => (v: number) =>
-    setInputs((prev) => ({ ...prev, [key]: v }));
+    setInputs((prev) => ({ ...prev, [key]: key === "num_turbinas" ? Math.round(v) : v }));
 
   const out = useMemo(() => calculate(inputs), [inputs]);
-  const compareOut = useMemo(() => calculate(compareInputs), [compareInputs]);
   const atmosphericTransmission = getAtmosphericTransmission(inputs, out);
   const visibilityCopy = VISIBILITY_COPY[out.visibilityReason];
 
@@ -290,7 +221,7 @@ const Index = () => {
             <MetricCard label="Oculto (m)" value={out.h_oculta.toFixed(1)} color="destructive" />
             <MetricCard label="Visível (m)" value={out.h_visivel.toFixed(1)} color={out.h_visivel > 0 ? "success" : "destructive"} />
             <MetricCard label="θ real" value={`${out.theta.toFixed(4)}°`} color="accent" />
-            <MetricCard label="Depressão" value={`${out.depressao_horizonte_deg.toFixed(4)}°`} color="warning" />
+            <MetricCard label="Espaçamento" value={`${out.distancia_entre_turbinas_km.toFixed(2)} km`} color="primary" />
             <MetricCard label="Transmissão" value={formatPct(atmosphericTransmission * 100)} color={out.isVisible ? "success" : "warning"} />
             <MetricCard label="Prob. Detecção" value={out.isVisible ? `${out.prob_pct.toFixed(1)}%` : "0.0%"} color={out.isVisible ? "accent" : "destructive"} />
           </div>
@@ -298,24 +229,9 @@ const Index = () => {
 
         <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-6">
           <section className="bg-card border border-border rounded-lg p-5 panel-glow space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-bold tracking-[0.1em] text-muted-foreground uppercase">Presets de cenário</h2>
-                <p className="text-xs text-muted-foreground mt-1">Use atalhos para simular praia, mirante, prédio alto e condições atmosféricas típicas.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SCENARIO_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => setInputs(cloneInputs(preset.inputs))}
-                    className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-bold text-foreground hover:border-accent hover:text-accent transition-colors"
-                    title={preset.description}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
+            <div>
+              <h2 className="text-sm font-bold tracking-[0.1em] text-muted-foreground uppercase">Diagnóstico do cenário</h2>
+              <p className="text-xs text-muted-foreground mt-1">Ajuste os parâmetros abaixo para avaliar o cenário atual sem presets ou comparação A/B.</p>
             </div>
             <div className="rounded-lg border border-border bg-background/40 p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -337,8 +253,8 @@ const Index = () => {
                     <strong className="block text-foreground text-base">{LIMITING_FACTOR_COPY[out.limitingFactor]}</strong>
                   </div>
                   <div className="rounded bg-secondary/60 p-3">
-                    <span className="text-muted-foreground">Escala angular</span>
-                    <strong className="block text-foreground text-base">Sol/Lua ≈ 0,5°</strong>
+                    <span className="text-muted-foreground">Entre turbinas</span>
+                    <strong className="block text-foreground text-base">{out.distancia_entre_turbinas_km.toFixed(2)} km</strong>
                   </div>
                 </div>
               </div>
@@ -353,7 +269,7 @@ const Index = () => {
             <div className="flex flex-col sm:flex-row xl:flex-col gap-3">
               <button
                 type="button"
-                onClick={() => downloadSummaryPng(inputs, out, compareInputs, compareOut)}
+                onClick={() => downloadSummaryPng(inputs, out)}
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
               >
                 <Download className="h-4 w-4" />
@@ -361,7 +277,7 @@ const Index = () => {
               </button>
               <button
                 type="button"
-                onClick={() => printSummaryPdf(inputs, out, compareInputs, compareOut)}
+                onClick={() => printSummaryPdf(inputs, out)}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-secondary px-4 py-2 text-sm font-bold text-foreground hover:border-accent"
               >
                 <FileText className="h-4 w-4" />
@@ -371,43 +287,11 @@ const Index = () => {
           </section>
         </div>
 
-        <section className="bg-card border border-border rounded-lg p-5 panel-glow space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-bold tracking-[0.1em] text-muted-foreground uppercase">Comparação A/B</h2>
-              <p className="text-xs text-muted-foreground mt-1">Compare o cenário atual com um preset ou congele o cenário atual como referência B.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setCompareInputs(cloneInputs(inputs))}
-                className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs font-bold text-foreground hover:border-accent hover:text-accent"
-              >
-                Copiar atual para B
-              </button>
-              {SCENARIO_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setCompareInputs(cloneInputs(preset.inputs))}
-                  className="rounded-full border border-border bg-background/40 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:border-accent hover:text-accent"
-                >
-                  B: {preset.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ScenarioSummary title="Cenário A - atual" inputs={inputs} out={out} />
-            <ScenarioSummary title="Cenário B - comparação" inputs={compareInputs} out={compareOut} />
-          </div>
-        </section>
-
         <div className="bg-card border border-border rounded-lg p-4 panel-glow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-foreground">Renderização dos canvases</h2>
             <p className="text-xs text-muted-foreground">
-              Por padrão, os gráficos redesenham apenas quando parâmetros ou tamanho mudam. A névoa visual usa transmissão atmosférica proporcional a e^-βd.
+              Os gráficos redesenham apenas quando parâmetros ou tamanho mudam. A animação dos rotores permanece opcional.
             </p>
           </div>
           <label className="inline-flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
@@ -422,14 +306,13 @@ const Index = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <FOVCanvas alpha={out.alpha} isVisible={out.isVisible} atmosphericTransmission={atmosphericTransmission} animate={animateCanvases} />
+          <FOVCanvas alpha={out.alpha} isVisible={out.isVisible} numTurbinas={inputs.num_turbinas} animate={animateCanvases} />
           <ProfileCanvas
             dist_km={inputs.dist_km}
             h_turbina={inputs.h_turbina}
             h_oculta={out.h_oculta}
             h_visivel={out.h_visivel}
             isVisible={out.isVisible}
-            atmosphericTransmission={atmosphericTransmission}
             animate={animateCanvases}
           />
         </div>
@@ -440,6 +323,8 @@ const Index = () => {
           depressaoHorizonteDeg={out.depressao_horizonte_deg}
           alpha={out.alpha}
           largura_km={inputs.largura_km}
+          numTurbinas={inputs.num_turbinas}
+          distanciaEntreTurbinasKm={out.distancia_entre_turbinas_km}
           h_visivel={out.h_visivel}
           h_oculta={out.h_oculta}
           h_turbina={inputs.h_turbina}
@@ -450,10 +335,11 @@ const Index = () => {
         />
 
         <div className="bg-card border border-border rounded-lg p-6 panel-glow">
-          <h2 className="text-sm font-bold tracking-[0.1em] text-muted-foreground uppercase mb-5">Parâmetros do cenário A</h2>
+          <h2 className="text-sm font-bold tracking-[0.1em] text-muted-foreground uppercase mb-5">Parâmetros do cenário</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
             <ControlSlider label="Distância até Costa" value={inputs.dist_km} min={1} max={200} step={0.5} unit="km" onChange={set("dist_km")} />
             <ControlSlider label="Largura do Parque" value={inputs.largura_km} min={0} max={100} step={0.5} unit="km" onChange={set("largura_km")} />
+            <ControlSlider label="Número de Turbinas" value={inputs.num_turbinas} min={1} max={100} step={1} unit="un." onChange={set("num_turbinas")} />
             <ControlSlider label="Altura da Turbina" value={inputs.h_turbina} min={0} max={600} step={1} unit="m" onChange={set("h_turbina")} />
             <ControlSlider label="Elevação do Observador" value={inputs.h_obs} min={0} max={500} step={0.1} unit="m" onChange={set("h_obs")} />
             <ControlSlider label="Área Sólida Transversal" value={inputs.area} min={0} max={5000} step={10} unit="m²" onChange={set("area")} />
