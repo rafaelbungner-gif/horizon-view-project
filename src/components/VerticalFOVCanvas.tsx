@@ -7,6 +7,8 @@ interface VerticalFOVCanvasProps {
   depressaoHorizonteDeg?: number;
   alpha: number;
   largura_km: number;
+  numTurbinas: number;
+  distanciaEntreTurbinasKm: number;
   h_visivel: number;
   h_oculta: number;
   h_turbina: number;
@@ -19,7 +21,6 @@ interface VerticalFOVCanvasProps {
 const FOV_VERTICAL = 8;
 const FOV_HORIZONTAL = 30;
 const SUN_MOON_DEG = 0.5;
-const TURBINE_SPACING_KM = 1.2;
 
 const VerticalFOVCanvas = ({
   theta,
@@ -27,6 +28,8 @@ const VerticalFOVCanvas = ({
   depressaoHorizonteDeg = 0,
   alpha,
   largura_km,
+  numTurbinas,
+  distanciaEntreTurbinasKm,
   h_visivel,
   h_oculta,
   h_turbina,
@@ -61,7 +64,7 @@ const VerticalFOVCanvas = ({
     const parkLeft = centerX - alphaPx / 2;
     const parkRight = centerX + alphaPx / 2;
     const bladePhase = animate ? time * 0.0015 : -Math.PI / 2;
-    const turbineCount = Math.max(2, Math.min(16, Math.round(Math.max(largura_km, 1) / TURBINE_SPACING_KM)));
+    const turbineCount = Math.max(1, Math.min(16, numTurbinas));
 
     ctx.clearRect(0, 0, w, h);
 
@@ -220,8 +223,8 @@ const VerticalFOVCanvas = ({
 
     const legendX = marginL + 12;
     const legendTop = marginT + 12;
-    const legendW = 288;
-    const legendH = 104;
+    const legendW = 310;
+    const legendH = 120;
     ctx.fillStyle = "hsla(215, 50%, 12%, 0.86)";
     ctx.beginPath();
     ctx.roundRect(legendX, legendTop, legendW, legendH, 10);
@@ -239,7 +242,8 @@ const VerticalFOVCanvas = ({
     ctx.fillText(`θ real = ${theta.toFixed(4)}° · θ geom = ${thetaSpan.toFixed(4)}°`, legendX + 10, legendTop + 30);
     ctx.fillText(`Depressão do horizonte = ${depressaoHorizonteDeg.toFixed(4)}°`, legendX + 10, legendTop + 47);
     ctx.fillText(`α = ${alpha.toFixed(2)}° · transmissão = ${(transmission * 100).toFixed(0)}%`, legendX + 10, legendTop + 64);
-    ctx.fillText(`Oculto: ${h_oculta.toFixed(1)} m · visível: ${h_visivel.toFixed(1)} m`, legendX + 10, legendTop + 81);
+    ctx.fillText(`Turbinas = ${numTurbinas} · espaçamento = ${distanciaEntreTurbinasKm.toFixed(2)} km`, legendX + 10, legendTop + 81);
+    ctx.fillText(`Oculto: ${h_oculta.toFixed(1)} m · visível: ${h_visivel.toFixed(1)} m`, legendX + 10, legendTop + 98);
 
     if (h_visivel <= 0) {
       ctx.fillStyle = "hsl(0 72% 63%)";
@@ -252,7 +256,7 @@ const VerticalFOVCanvas = ({
       ctx.font = "bold 13px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("ATENUADO PELA NÉVOA", centerX, horizonY - 20);
+      ctx.fillText("ATENUADO PELA ATMOSFERA", centerX, horizonY - 20);
     }
 
     const barY = marginT + viewH + 24;
@@ -275,7 +279,7 @@ const VerticalFOVCanvas = ({
     ctx.fillRect(barX2, barY, Math.min(alpha / FOV_HORIZONTAL, 1) * halfW, barH);
     ctx.fillStyle = "hsl(240 4% 65%)";
     ctx.fillText(`Horizontal α: ${((alpha / FOV_HORIZONTAL) * 100).toFixed(2)}% do FOV${alpha > FOV_HORIZONTAL ? " (excede)" : ""}`, barX2, barY + barH + 3);
-  }, [alpha, animate, atmosphericTransmission, depressaoHorizonteDeg, dist_km, h_oculta, h_turbina, h_visivel, isVisible, largura_km, theta, thetaAproximado]);
+  }, [alpha, animate, atmosphericTransmission, depressaoHorizonteDeg, distanciaEntreTurbinasKm, dist_km, h_oculta, h_turbina, h_visivel, isVisible, numTurbinas, theta, thetaAproximado]);
 
   useCanvasRenderer(canvasRef, draw, animate);
 
