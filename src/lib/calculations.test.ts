@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  BISHOP_LOGIT_INTERCEPT,
+  BISHOP_LOGIT_SLOPE,
   calculate,
   CONTRAST_THRESHOLD_PCT,
   EARTH_RADIUS_M,
+  ROTOR_MOTION_AREA_FACTOR,
   type CalcInputs,
 } from "./calculations";
 
@@ -21,6 +24,8 @@ const makeInputs = (overrides: Partial<CalcInputs> = {}): CalcInputs => ({
   ...baseInputs,
   ...overrides,
 });
+
+const deg = (rad: number) => (rad * 180) / Math.PI;
 
 describe("calculate", () => {
   it("calculates the observer horizon and hidden turbine height", () => {
@@ -52,6 +57,27 @@ describe("calculate", () => {
     expect(refracted.distancia_geometrica_max_km).toBeGreaterThan(pureGeometry.distancia_geometrica_max_km);
   });
 
+  it("adds horizon depression to theta when the target is beyond the observer horizon", () => {
+    const inputs = makeInputs({ dist_km: 60, h_obs: 120, h_turbina: 300, k: 1.17 });
+    const out = calculate(inputs);
+    const distM = inputs.dist_km * 1000;
+    const effectiveEarthRadius = EARTH_RADIUS_M * inputs.k;
+    const expectedApproxTheta = deg(Math.atan(out.h_visivel / distM));
+    const expectedDepression = deg(Math.atan(out.horizonte_obs / (2 * effectiveEarthRadius)));
+
+    expect(distM).toBeGreaterThan(out.horizonte_obs);
+    expect(out.theta_aproximado).toBeCloseTo(expectedApproxTheta, 10);
+    expect(out.depressao_horizonte_deg).toBeCloseTo(expectedDepression, 10);
+    expect(out.theta).toBeCloseTo(expectedApproxTheta + expectedDepression, 10);
+  });
+
+  it("keeps theta equal to the visible angular span before the observer horizon", () => {
+    const out = calculate(makeInputs({ dist_km: 4, h_obs: 120, h_turbina: 300, k: 1.17 }));
+
+    expect(out.depressao_horizonte_deg).toBe(0);
+    expect(out.theta).toBe(out.theta_aproximado);
+  });
+
   it("applies atmospheric attenuation beta before marking the turbine visible", () => {
     const clearAir = calculate(makeInputs({ dist_km: 25, h_obs: 50, h_turbina: 300, beta: 0 }));
     const denseHaze = calculate(makeInputs({ dist_km: 25, h_obs: 50, h_turbina: 300, beta: 0.0003 }));
@@ -74,6 +100,14 @@ describe("calculate", () => {
     expect(out.distancia_atmosferica_max_km).toBeCloseTo(expectedKm, 6);
   });
 
+  it("marks the atmospheric limit as zero when initial contrast is already below threshold", () => {
+    const out = calculate(makeInputs({ ci: 1.5, beta: 0.00008 }));
+
+    expect(out.distancia_atmosferica_max_km).toBe(0);
+    expect(out.distancia_limite_visibilidade_km).toBe(0);
+    expect(out.atmosfera_permite).toBe(false);
+  });
+
   it("treats the contrast threshold as visible at the boundary", () => {
     const distM = 10_000;
     const betaAtThreshold = Math.log(baseInputs.ci / CONTRAST_THRESHOLD_PCT) / distM;
@@ -81,6 +115,18 @@ describe("calculate", () => {
 
     expect(out.cd).toBeCloseTo(CONTRAST_THRESHOLD_PCT, 10);
     expect(out.atmosfera_permite).toBe(true);
+  });
+
+  it("uses the consolidated Bishop Table 5 equivalent logit constants", () => {
+    const inputs = makeInputs({ dist_km: 15, h_obs: 20, h_turbina: 260, area: 1500, ci: 35, beta: 0 });
+    const out = calculate(inputs);
+    const distM = inputs.dist_km * 1000;
+    const oneMeterAngularMinutes = Math.atan(1 / distM) * deg(1) * 60;
+    const visualMagnitude = inputs.area * ROTOR_MOTION_AREA_FACTOR * Math.pow(oneMeterAngularMinutes, 2);
+    const logit = BISHOP_LOGIT_INTERCEPT + BISHOP_LOGIT_SLOPE * (out.cd * visualMagnitude);
+    const expectedProbability = (1 / (1 + Math.exp(-logit))) * 100;
+
+    expect(out.prob_pct).toBeCloseTo(expectedProbability, 10);
   });
 
   it("returns zero angular occupation when the turbine is fully hidden", () => {
