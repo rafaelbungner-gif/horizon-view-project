@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { clamp, useCanvasRenderer, type CanvasSize } from "@/hooks/useCanvasRenderer";
+import { useCanvasRenderer, type CanvasSize } from "@/hooks/useCanvasRenderer";
 
 interface ProfileCanvasProps {
   dist_km: number;
@@ -7,7 +7,6 @@ interface ProfileCanvasProps {
   h_oculta: number;
   h_visivel: number;
   isVisible: boolean;
-  atmosphericTransmission?: number;
   animate?: boolean;
 }
 
@@ -17,7 +16,6 @@ const ProfileCanvas = ({
   h_oculta,
   h_visivel,
   isVisible,
-  atmosphericTransmission = 1,
   animate = false,
 }: ProfileCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,9 +35,7 @@ const ProfileCanvas = ({
     const turbineTopY = seaEndY - h_turbina * scaleY;
     const visibleTopY = observerEyeY - h_visivel * scaleY;
     const bladePhase = animate ? time * 0.0008 : -Math.PI / 2;
-    const transmission = clamp(atmosphericTransmission, 0, 1);
-    const fogOpacity = clamp(1 - transmission, 0, 0.82);
-    const visibleOpacity = isVisible ? clamp(0.22 + transmission * 0.78, 0.22, 1) : 0.25;
+    const visibleOpacity = isVisible ? 1 : 0.3;
 
     ctx.clearRect(0, 0, w, h);
 
@@ -135,15 +131,6 @@ const ProfileCanvas = ({
       ctx.fillText(`${h_visivel.toFixed(1)} m visível`, endX - 10, visibleTopY + 4);
     }
 
-    if (fogOpacity > 0.02) {
-      ctx.fillStyle = `hsla(205, 35%, 82%, ${fogOpacity * 0.58})`;
-      ctx.fillRect(startX, 35, drawW, baseY - 20);
-      ctx.fillStyle = "hsl(205, 35%, 84%)";
-      ctx.font = "bold 11px Inter, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`Névoa: transmissão ${(transmission * 100).toFixed(0)}%`, w / 2, 52);
-    }
-
     ctx.fillStyle = "hsl(240, 5%, 85%)";
     ctx.beginPath();
     ctx.arc(startX, baseY - 18, 5, 0, Math.PI * 2);
@@ -168,7 +155,7 @@ const ProfileCanvas = ({
       ctx.textAlign = "center";
       ctx.fillText("GEOMETRIA VISÍVEL, MAS CONTRASTE ABAIXO DO LIMIAR", w / 2, h / 2);
     }
-  }, [animate, atmosphericTransmission, dist_km, h_oculta, h_turbina, h_visivel, isVisible]);
+  }, [animate, dist_km, h_oculta, h_turbina, h_visivel, isVisible]);
 
   useCanvasRenderer(canvasRef, draw, animate);
 
