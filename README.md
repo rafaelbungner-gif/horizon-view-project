@@ -2,22 +2,23 @@
 
 Simulador em React + Vite para estimar a visibilidade geométrica e atmosférica de turbinas eólicas offshore a partir de um observador em terra.
 
-O painel combina quatro blocos de cálculo:
+O painel combina cinco blocos de cálculo:
 
 - curvatura da Terra com raio efetivo por refração atmosférica (`k`)
 - altura oculta e altura visível da turbina
 - ocupação angular horizontal (`alpha`) e vertical real (`theta`)
 - contraste remanescente e probabilidade de detecção visual inspirada em Bishop (2002)
+- distância média entre turbinas a partir da largura do parque e do número de turbinas
 
 ## Recursos de usabilidade
 
-- Presets rápidos para praia, mirante, prédio alto, ar limpo e névoa leve.
+- Cenário único e direto, sem presets e sem comparação A/B.
 - Diagnóstico explícito do motivo da invisibilidade: horizonte, atmosfera, ambos ou ausência de estrutura.
 - Distância máxima por geometria, distância máxima por contraste e limitante dominante.
-- Comparação A/B entre cenário atual e cenário de referência.
+- Campo `Número de Turbinas` para calcular o espaçamento médio entre turbinas.
 - Exportação de resumo técnico em PNG e impressão/salvamento em PDF pelo navegador.
 - Canvases com renderização sob demanda e animação opcional dos rotores.
-- Névoa visual nos canvases proporcional à transmissão atmosférica `exp(-beta * d)`.
+- Campo de visão periférico e perfil lateral sem camada visual de névoa.
 - Referência angular Sol/Lua de aproximadamente `0,5°` no canvas vertical.
 
 ## Requisitos
@@ -50,7 +51,36 @@ npm run lint
 npm run build
 ```
 
-Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, depressão do horizonte, diagnóstico de invisibilidade, distâncias-limite e casos-limite.
+Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, depressão do horizonte, diagnóstico de invisibilidade, distâncias-limite, espaçamento entre turbinas e casos-limite.
+
+## Estrutura de pastas
+
+```text
+.
+├── public/                  # arquivos estáticos servidos pelo Vite
+├── src/                     # código-fonte da aplicação
+│   ├── components/          # componentes reutilizáveis da interface
+│   │   ├── ControlSlider.tsx        # controles numéricos dos parâmetros
+│   │   ├── FOVCanvas.tsx            # campo de visão periférico, sem névoa visual
+│   │   ├── MetricCard.tsx           # cartões de métricas do cabeçalho
+│   │   ├── ProfileCanvas.tsx        # perfil lateral da curvatura, sem névoa visual
+│   │   ├── TechnicalDocs.tsx        # memorial de cálculo exibido na página
+│   │   └── VerticalFOVCanvas.tsx    # simulação angular vertical e largura do parque
+│   ├── hooks/               # hooks reutilizáveis
+│   │   └── useCanvasRenderer.ts     # setup de canvas e render sob demanda
+│   ├── lib/                 # núcleo matemático e testes
+│   │   ├── calculations.ts          # função calculate() e constantes físicas
+│   │   └── calculations.test.ts     # testes unitários do modelo
+│   ├── pages/               # telas principais
+│   │   └── Index.tsx                # composição da simulação e exportações
+│   ├── App.tsx              # roteamento/base da aplicação
+│   ├── main.tsx             # entrada React
+│   └── index.css            # estilos globais e tokens visuais
+├── package.json             # scripts, dependências e metadados do app
+├── tailwind.config.ts       # configuração visual do Tailwind
+├── tsconfig.json            # configuração TypeScript com strictNullChecks
+└── vite.config.ts           # configuração do Vite
+```
 
 ## Modelo matemático
 
@@ -60,6 +90,7 @@ Os testes unitários cobrem `calculate()` para horizonte geométrico, refração
 - `h_obs`: elevação do observador, em metros
 - `h_turbina`: altura máxima da turbina, em metros
 - `largura_km`: largura lateral do parque, em quilômetros
+- `num_turbinas`: quantidade de turbinas distribuídas na largura informada
 - `area`: área sólida transversal percebida, em metros quadrados
 - `ci`: contraste inicial, em porcentagem
 - `k`: fator de refração atmosférica aplicado ao raio terrestre
@@ -121,6 +152,20 @@ theta_real = theta_geom + depressao_horizonte
 
 `alpha`, `theta_geom`, `depressao_horizonte` e `theta_real` são convertidos para graus. A interface exibe `theta_real` como o ângulo vertical principal e mantém `theta_geom` nos resumos técnicos para comparação.
 
+### Distância entre turbinas
+
+O espaçamento médio considera uma distribuição linear simples ao longo da largura informada do parque:
+
+```text
+se num_turbinas > 1:
+  distancia_entre_turbinas = largura_km / (num_turbinas - 1)
+
+se num_turbinas = 1:
+  distancia_entre_turbinas = 0
+```
+
+Esse valor é uma aproximação de primeira ordem. Ele não modela múltiplas fileiras, stagger, corredores de navegação, exclusões ambientais ou layout real de aerogeradores.
+
 ### Atenuação atmosférica
 
 O contraste remanescente é calculado por decaimento exponencial:
@@ -158,6 +203,7 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 - O observador e a turbina estão no mesmo datum vertical, com alturas em relação ao nível médio do mar.
 - A distância é uma linha reta horizontal simplificada entre observador e parque.
 - A turbina é representada por altura máxima e área transversal agregada, não por geometria 3D detalhada.
+- As turbinas são distribuídas linearmente na largura informada apenas para estimar espaçamento médio.
 - `beta` é uniforme ao longo de todo o percurso óptico.
 - A refração é constante e resumida por um único `k`.
 - A visibilidade atmosférica usa contraste percentual, não luminância espectral calibrada.
@@ -168,6 +214,7 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 - Não considera relevo intermediário, edificações, ilhas, ondas ou vegetação.
 - Não modela variação temporal de clima, brilho solar, horário, cor da turbina ou fundo visual.
 - O parque é simplificado como uma largura angular contínua; layouts reais com múltiplas linhas podem alterar a percepção.
+- O espaçamento calculado não representa layout executivo do parque eólico.
 - A probabilidade de detecção depende de calibração empírica e deve ser tratada como indicador comparativo, não como verdade absoluta.
 - Para distâncias muito curtas, a aproximação de pequena curvatura deixa de ser o principal fator e deve ser interpretada com cautela.
 
@@ -175,4 +222,10 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 
 Os canvases renderizam sob demanda por padrão: redesenham quando parâmetros mudam ou quando o tamanho do componente muda. A animação dos rotores é opcional e pode ser ligada no painel, evitando um loop contínuo de `requestAnimationFrame` quando a cena está estática.
 
-O canvas vertical usa escala angular explícita, mostra referência Sol/Lua de `0,5°` e evita transformar objetos subpixel em turbinas artificialmente grandes. Quando a porção visível é menor que a resolução útil do canvas, a cena usa um marcador e informa que a altura angular está abaixo da escala visual.
+O campo de visão periférico e o perfil lateral não aplicam camada visual de névoa. A atenuação atmosférica permanece no cálculo, nas métricas e no diagnóstico de visibilidade.
+
+O canvas vertical usa escala angular explícita, mostra referência Sol/Lua de `0,5°` e evita transformar objetos subpixel em turbinas artificialmente grandes. Quando a porção visível é menor que a resolução útil do canvas, a cena usa um marcador e informa que a altura angular está abaixo da escala visual. Para preservar a legibilidade, a visualização limita a quantidade desenhada de turbinas, mas o cálculo de espaçamento usa sempre o número informado.
+
+## Publicação na web
+
+A forma mais simples de conferir a funcionalidade online é publicar pelo GitHub Pages ou por um serviço como Vercel/Netlify. Para GitHub Pages, use o build `npm run build` e publique a pasta `dist/` como saída estática.

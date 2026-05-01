@@ -8,54 +8,65 @@ const TechnicalDocs = () => (
       Memorial de Cálculo e Referências
     </h2>
     <p className="text-muted-foreground text-sm mb-6">
-      O painel combina curvatura terrestre, refração atmosférica, atenuação de contraste e uma leitura angular corrigida pela depressão do horizonte quando o observador está elevado.
+      O painel combina curvatura terrestre, refração atmosférica, atenuação de contraste, uma leitura angular corrigida pela depressão do horizonte e o espaçamento médio entre turbinas.
     </p>
 
     <Section title="1. Curvatura da Terra e refração">
       <p>O raio efetivo resume a refração atmosférica em um único fator <Math tex="k" />. A altura oculta só passa a crescer quando o alvo está além do horizonte do observador.</p>
       <DocCard>
-        <Math tex="R_{efetivo} = R \cdot k" block />
-        <Math tex="d_{obs} = \sqrt{2 \cdot R_{efetivo} \cdot h_{obs}}" block />
-        <Math tex="h_{oculta} = \frac{\max(0,\;d-d_{obs})^2}{2 \cdot R_{efetivo}}" block />
-        <Math tex="h_{visivel} = \max(0,\; h_{turbina} - h_{oculta})" block />
+        <Math tex="R_{efetivo} = R \\cdot k" block />
+        <Math tex="d_{obs} = \\sqrt{2 \\cdot R_{efetivo} \\cdot h_{obs}}" block />
+        <Math tex="h_{oculta} = \\frac{\\max(0,\\;d-d_{obs})^2}{2 \\cdot R_{efetivo}}" block />
+        <Math tex="h_{visivel} = \\max(0,\\; h_{turbina} - h_{oculta})" block />
       </DocCard>
     </Section>
 
     <Section title="2. Ocupação angular e depressão do horizonte">
-      <p>O valor <Math tex="\theta_{geom}" /> mede a abertura angular da porção visível. Quando a turbina está além do horizonte do observador, o painel soma a depressão do horizonte para representar melhor a posição angular real no campo de visão.</p>
+      <p>O valor <Math tex="\\theta_{geom}" /> mede a abertura angular da porção visível. Quando a turbina está além do horizonte do observador, o painel soma a depressão do horizonte para representar melhor a posição angular real no campo de visão.</p>
       <DocCard>
-        <Math tex="\alpha = 2 \cdot \arctan\!\left(\frac{W}{2d}\right) \cdot \frac{180}{\pi}" block />
-        <Math tex="\theta_{geom} = \arctan\!\left(\frac{h_{visivel}}{d}\right) \cdot \frac{180}{\pi}" block />
-        <Math tex="\delta_h = \arctan\!\left(\frac{d_{obs}}{2R_{efetivo}}\right) \cdot \frac{180}{\pi}" block />
-        <Math tex="\theta_{real} = \theta_{geom} + \delta_h" block />
+        <Math tex="\\alpha = 2 \\cdot \\arctan\\!\\left(\\frac{W}{2d}\\right) \\cdot \\frac{180}{\\pi}" block />
+        <Math tex="\\theta_{geom} = \\arctan\\!\\left(\\frac{h_{visivel}}{d}\\right) \\cdot \\frac{180}{\\pi}" block />
+        <Math tex="\\delta_h = \\arctan\\!\\left(\\frac{d_{obs}}{2R_{efetivo}}\\right) \\cdot \\frac{180}{\\pi}" block />
+        <Math tex="\\theta_{real} = \\theta_{geom} + \\delta_h" block />
         <p className="text-xs text-muted-foreground mt-3">
-          A correção <Math tex="\delta_h" /> é aplicada apenas quando <Math tex="d > d_{obs}" /> e há altura visível.
+          A correção <Math tex="\\delta_h" /> é aplicada apenas quando <Math tex="d > d_{obs}" /> e há altura visível.
         </p>
       </DocCard>
     </Section>
 
-    <Section title="3. Atmosfera, contraste e alcance visual">
+    <Section title="3. Distância entre turbinas">
+      <p>O novo campo de quantidade de turbinas calcula o espaçamento médio linear ao longo da largura informada do parque. O resultado é exibido no cabeçalho, no diagnóstico e nos resumos exportados.</p>
+      <DocCard>
+        <Math tex="s = \\frac{W}{N - 1},\\quad N > 1" block />
+        <Math tex="s = 0,\\quad N = 1" block />
+        <p className="text-xs text-muted-foreground mt-3">
+          O cálculo usa <Math tex="W" /> como largura do parque em quilômetros e <Math tex="N" /> como número de turbinas. Ele não substitui um layout executivo com múltiplas fileiras, espaçamentos irregulares ou exclusões locais.
+        </p>
+      </DocCard>
+    </Section>
+
+    <Section title="4. Atmosfera, contraste e alcance visual">
       <p>O contraste remanescente segue um decaimento exponencial. Se o contraste inicial já estiver abaixo de 2%, o limite atmosférico é zero e a interface mostra o alvo como já invisível.</p>
       <DocCard>
-        <Math tex="C_d = C_i \cdot e^{-\beta \cdot d}" block />
-        <Math tex="d_{limiar} = \frac{\ln(C_i/2)}{\beta}" block />
+        <Math tex="C_d = C_i \\cdot e^{-\\beta \\cdot d}" block />
+        <Math tex="d_{limiar} = \\frac{\\ln(C_i/2)}{\\beta}" block />
         <p className="text-xs text-muted-foreground mt-3">
-          Para <Math tex="\beta = 0" />, o alcance atmosférico é ilimitado. Para <Math tex="C_i < 2\%" />, o alcance atmosférico é <Math tex="0" />.
+          Para <Math tex="\\beta = 0" />, o alcance atmosférico é ilimitado. Para <Math tex="C_i < 2\\%" />, o alcance atmosférico é <Math tex="0" />. A camada visual de névoa foi removida do campo periférico e do perfil lateral, mantendo a atmosfera como cálculo e diagnóstico.
         </p>
       </DocCard>
     </Section>
 
-    <Section title="4. Probabilidade visual inspirada em Bishop (2002)">
+    <Section title="5. Probabilidade visual inspirada em Bishop (2002)">
       <p>O código usa o modelo logístico univariado equivalente ao intercepto consolidado <Math tex="-3{,}27" />, evitando somar simultaneamente constantes de tabelas diferentes.</p>
       <DocCard>
-        <Math tex="M = area \cdot 1{,}2" block />
-        <Math tex="S = M \cdot \left[\arctan\!\left(\frac{1}{d}\right) \cdot \frac{180}{\pi} \cdot 60\right]^2" block />
-        <Math tex="Z = -3{,}27 + 0{,}0124 \cdot (C_d \cdot S)" block />
-        <Math tex="P_{deteccao} = \frac{1}{1 + e^{-Z}} \times 100" block />
+        <Math tex="M = area \\cdot 1{,}2" block />
+        <Math tex="S = M \\cdot \\left[\\arctan\\!\\left(\\frac{1}{d}\\right) \\cdot \\frac{180}{\\pi} \\cdot 60\\right]^2" block />
+        <Math tex="Z = -3{,}27 + 0{,}0124 \\cdot (C_d \\cdot S)" block />
+        <Math tex="P_{deteccao} = \\frac{1}{1 + e^{-Z}} \\times 100" block />
       </DocCard>
     </Section>
 
-    <Section title="5. Parâmetros de referência">
+    <Section title="6. Parâmetros de referência">
       <div className="grid gap-4 md:grid-cols-2">
         <DocCard accent="primary">
           <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de refração (k)</h4>
