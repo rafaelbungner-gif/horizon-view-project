@@ -1,4 +1,4 @@
-# Horizon View Project
+# Paisagem Marinha Eólica EVP
 
 Simulador em React + Vite para estimar a visibilidade geométrica e atmosférica de turbinas eólicas offshore a partir de um observador em terra.
 
@@ -8,6 +8,15 @@ O painel combina quatro blocos de cálculo:
 - altura oculta e altura visível da turbina
 - ocupação angular horizontal (`alpha`) e vertical (`theta`)
 - contraste remanescente e probabilidade de detecção visual inspirada em Bishop (2002)
+
+## Recursos de usabilidade
+
+- Presets rápidos para praia, mirante, prédio alto, ar limpo e névoa leve.
+- Diagnóstico explícito do motivo da invisibilidade: horizonte, atmosfera, ambos ou ausência de estrutura.
+- Distância máxima por geometria, distância máxima por contraste e limitante dominante.
+- Comparação A/B entre cenário atual e cenário de referência.
+- Exportação de resumo técnico em PNG e impressão/salvamento em PDF pelo navegador.
+- Canvases com renderização sob demanda e animação opcional dos rotores.
 
 ## Requisitos
 
@@ -39,7 +48,7 @@ npm run lint
 npm run build
 ```
 
-Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste e casos-limite.
+Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, diagnóstico de invisibilidade, distâncias-limite e casos-limite.
 
 ## Modelo matemático
 
@@ -78,6 +87,12 @@ Depois, `h_oculta` é limitada ao intervalo `[0, h_turbina]`, e a altura visíve
 
 ```text
 h_visivel = max(0, h_turbina - h_oculta)
+```
+
+A distância geométrica máxima para que a ponta da turbina ainda possa aparecer é:
+
+```text
+d_geom_max = sqrt(2 * R_efetivo * h_obs) + sqrt(2 * R_efetivo * h_turbina)
 ```
 
 Valores típicos de `k`:
