@@ -3,6 +3,7 @@ export interface CalcInputs {
   h_turbina: number;
   h_obs: number;
   largura_km: number;
+  num_turbinas: number;
   area: number;
   ci: number;
   k: number;
@@ -25,6 +26,7 @@ export interface CalcOutputs {
   theta: number;
   theta_aproximado: number;
   depressao_horizonte_deg: number;
+  distancia_entre_turbinas_km: number;
   prob_pct: number;
   cd: number;
   isVisible: boolean;
@@ -67,11 +69,19 @@ function assertPositive(name: keyof CalcInputs, value: number) {
   }
 }
 
+function assertPositiveInteger(name: keyof CalcInputs, value: number) {
+  assertPositive(name, value);
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${name} must be an integer.`);
+  }
+}
+
 function validateInputs(inputs: CalcInputs) {
   assertPositive("dist_km", inputs.dist_km);
   assertNonNegative("h_turbina", inputs.h_turbina);
   assertNonNegative("h_obs", inputs.h_obs);
   assertNonNegative("largura_km", inputs.largura_km);
+  assertPositiveInteger("num_turbinas", inputs.num_turbinas);
   assertNonNegative("area", inputs.area);
   assertNonNegative("ci", inputs.ci);
   assertPositive("k", inputs.k);
@@ -118,10 +128,11 @@ function getLimitingFactor(geometricLimitKm: number, atmosphericLimitKm: number)
 export function calculate(inputs: CalcInputs): CalcOutputs {
   validateInputs(inputs);
 
-  const { dist_km, h_turbina, h_obs, largura_km, area, ci, k, beta } = inputs;
+  const { dist_km, h_turbina, h_obs, largura_km, num_turbinas, area, ci, k, beta } = inputs;
   const dist_m = dist_km * 1000;
   const largura_m = largura_km * 1000;
   const effectiveEarthRadius = EARTH_RADIUS_M * k;
+  const distancia_entre_turbinas_km = num_turbinas > 1 ? largura_km / (num_turbinas - 1) : 0;
 
   const horizonte_obs = Math.sqrt(2 * effectiveEarthRadius * h_obs);
   const turbineTopHorizon = Math.sqrt(2 * effectiveEarthRadius * h_turbina);
@@ -170,6 +181,7 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
     theta,
     theta_aproximado,
     depressao_horizonte_deg,
+    distancia_entre_turbinas_km,
     prob_pct,
     cd,
     isVisible,
