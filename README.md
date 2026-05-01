@@ -6,7 +6,7 @@ O painel combina quatro blocos de cálculo:
 
 - curvatura da Terra com raio efetivo por refração atmosférica (`k`)
 - altura oculta e altura visível da turbina
-- ocupação angular horizontal (`alpha`) e vertical (`theta`)
+- ocupação angular horizontal (`alpha`) e vertical real (`theta`)
 - contraste remanescente e probabilidade de detecção visual inspirada em Bishop (2002)
 
 ## Recursos de usabilidade
@@ -17,6 +17,8 @@ O painel combina quatro blocos de cálculo:
 - Comparação A/B entre cenário atual e cenário de referência.
 - Exportação de resumo técnico em PNG e impressão/salvamento em PDF pelo navegador.
 - Canvases com renderização sob demanda e animação opcional dos rotores.
+- Névoa visual nos canvases proporcional à transmissão atmosférica `exp(-beta * d)`.
+- Referência angular Sol/Lua de aproximadamente `0,5°` no canvas vertical.
 
 ## Requisitos
 
@@ -48,7 +50,7 @@ npm run lint
 npm run build
 ```
 
-Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, diagnóstico de invisibilidade, distâncias-limite e casos-limite.
+Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, depressão do horizonte, diagnóstico de invisibilidade, distâncias-limite e casos-limite.
 
 ## Modelo matemático
 
@@ -80,7 +82,7 @@ d_obs = sqrt(2 * R_efetivo * h_obs)
 Quando a turbina está além desse horizonte, a altura oculta é estimada por:
 
 ```text
-h_oculta = (d - d_obs)^2 / (2 * R_efetivo)
+h_oculta = max(0, d - d_obs)^2 / (2 * R_efetivo)
 ```
 
 Depois, `h_oculta` é limitada ao intervalo `[0, h_turbina]`, e a altura visível é:
@@ -107,10 +109,17 @@ Se existe altura visível, o modelo calcula:
 
 ```text
 alpha = 2 * atan(W / (2d))
-theta = atan(h_visivel / d)
+theta_geom = atan(h_visivel / d)
 ```
 
-`alpha` e `theta` são convertidos para graus. `alpha` mede a ocupação horizontal do parque; `theta` mede a ocupação vertical da porção visível.
+Quando `d > d_obs`, a leitura vertical inclui a depressão angular do horizonte para observadores elevados:
+
+```text
+depressao_horizonte = atan(d_obs / (2 * R_efetivo))
+theta_real = theta_geom + depressao_horizonte
+```
+
+`alpha`, `theta_geom`, `depressao_horizonte` e `theta_real` são convertidos para graus. A interface exibe `theta_real` como o ângulo vertical principal e mantém `theta_geom` nos resumos técnicos para comparação.
 
 ### Atenuação atmosférica
 
@@ -118,6 +127,7 @@ O contraste remanescente é calculado por decaimento exponencial:
 
 ```text
 C_d = C_i * exp(-beta * d)
+transmissao = C_d / C_i = exp(-beta * d)
 ```
 
 A aplicação usa `2%` como limiar operacional de contraste. Se `C_d < 2%`, a estrutura pode estar geometricamente acima do horizonte, mas é marcada como não detectável pela atmosfera.
@@ -128,16 +138,16 @@ A relação entre `beta` e alcance meteorológico costuma ser aproximada por `V 
 d_limiar = ln(C_i / 2) / beta
 ```
 
-Por isso, a mesma névoa pode permitir ou impedir visibilidade dependendo do contraste inicial assumido.
+Se `beta = 0`, o limite atmosférico é infinito. Se `C_i < 2%`, o limite atmosférico é `0 km` e a UI mostra o alvo como já invisível por contraste.
 
 ### Probabilidade de detecção
 
-Quando há altura visível e contraste suficiente, a probabilidade de detecção usa uma função logística baseada em Bishop (2002):
+Quando há altura visível e contraste suficiente, a probabilidade de detecção usa uma função logística baseada em Bishop (2002). O código consolida o intercepto equivalente em `-3.27`, evitando somar simultaneamente constantes de modelos/tabelas diferentes.
 
 ```text
 M = area * 1.2
 S = M * [atan(1 / d) * 180/pi * 60]^2
-Z = -16.02 + 0.0124 * (C_d * S) + 12.75
+Z = -3.27 + 0.0124 * (C_d * S)
 P = 1 / (1 + exp(-Z))
 ```
 
@@ -164,3 +174,5 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 ## Renderização
 
 Os canvases renderizam sob demanda por padrão: redesenham quando parâmetros mudam ou quando o tamanho do componente muda. A animação dos rotores é opcional e pode ser ligada no painel, evitando um loop contínuo de `requestAnimationFrame` quando a cena está estática.
+
+O canvas vertical usa escala angular explícita, mostra referência Sol/Lua de `0,5°` e evita transformar objetos subpixel em turbinas artificialmente grandes. Quando a porção visível é menor que a resolução útil do canvas, a cena usa um marcador e informa que a altura angular está abaixo da escala visual.

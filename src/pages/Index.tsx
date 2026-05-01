@@ -84,22 +84,34 @@ const LIMITING_FACTOR_COPY: Record<LimitingFactor, string> = {
 };
 
 const cloneInputs = (inputs: CalcInputs): CalcInputs => ({ ...inputs });
+const formatPct = (value: number) => `${value.toFixed(1)}%`;
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 const formatKm = (value: number) => {
-  if (!Number.isFinite(value)) return "sem limite atmos.";
+  if (!Number.isFinite(value)) return "sem limite";
   return `${value.toFixed(1)} km`;
 };
 
-const formatPct = (value: number) => `${value.toFixed(1)}%`;
+const formatAtmosphericKm = (value: number) => {
+  if (!Number.isFinite(value)) return "sem limite atmos.";
+  if (value <= 0) return "0,0 km (já invisível)";
+  return `${value.toFixed(1)} km`;
+};
+
+const getAtmosphericTransmission = (inputs: CalcInputs, out: CalcOutputs) => {
+  if (inputs.ci <= 0) return 0;
+  return clamp01(out.cd / inputs.ci);
+};
 
 const buildScenarioLines = (label: string, inputs: CalcInputs, out: CalcOutputs) => [
   `${label}`,
   `Diagnóstico: ${VISIBILITY_COPY[out.visibilityReason].title}`,
   `Distância: ${inputs.dist_km.toFixed(1)} km | Observador: ${inputs.h_obs.toFixed(1)} m | Turbina: ${inputs.h_turbina.toFixed(1)} m`,
   `Visível: ${out.h_visivel.toFixed(1)} m | Oculto: ${out.h_oculta.toFixed(1)} m`,
-  `Ângulos: α ${out.alpha.toFixed(2)}° | θ ${out.theta.toFixed(3)}° | Prob.: ${formatPct(out.prob_pct)}`,
-  `Contraste remanescente: ${out.cd.toFixed(2)}% | k ${inputs.k.toFixed(2)} | β ${inputs.beta.toFixed(5)}`,
-  `Limite geométrico: ${formatKm(out.distancia_geometrica_max_km)} | Limite atmosférico: ${formatKm(out.distancia_atmosferica_max_km)}`,
+  `Ângulos: α ${out.alpha.toFixed(2)}° | θ real ${out.theta.toFixed(4)}° | θ geom ${out.theta_aproximado.toFixed(4)}°`,
+  `Depressão do horizonte: ${out.depressao_horizonte_deg.toFixed(4)}° | Prob.: ${formatPct(out.prob_pct)}`,
+  `Contraste remanescente: ${out.cd.toFixed(2)}% | transmissão atmos.: ${formatPct(getAtmosphericTransmission(inputs, out) * 100)}`,
+  `Limite geométrico: ${formatKm(out.distancia_geometrica_max_km)} | Limite atmosférico: ${formatAtmosphericKm(out.distancia_atmosferica_max_km)}`,
   `Limitante dominante: ${LIMITING_FACTOR_COPY[out.limitingFactor]}`,
 ];
 
@@ -175,7 +187,7 @@ const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs, compareInputs:
     ctx.fillStyle = "#f4f7fb";
     ctx.font = "20px Arial";
     lines.slice(1).forEach((line) => {
-      y = drawWrappedText(ctx, line, x, y, 560, 30) + 10;
+      y = drawWrappedText(ctx, line, x, y, 560, 28) + 8;
     });
   });
 
@@ -226,6 +238,7 @@ const printSummaryPdf = (inputs: CalcInputs, out: CalcOutputs, compareInputs: Ca
 
 const ScenarioSummary = ({ title, inputs, out }: { title: string; inputs: CalcInputs; out: CalcOutputs }) => {
   const copy = VISIBILITY_COPY[out.visibilityReason];
+  const transmission = getAtmosphericTransmission(inputs, out);
 
   return (
     <div className="rounded-lg border border-border bg-secondary/35 p-4 space-y-3">
@@ -239,9 +252,9 @@ const ScenarioSummary = ({ title, inputs, out }: { title: string; inputs: CalcIn
       <p className="text-xs text-muted-foreground">{copy.body}</p>
       <div className="grid grid-cols-2 gap-3 text-xs">
         <span className="rounded bg-background/50 p-2">Visível: <strong className="text-foreground">{out.h_visivel.toFixed(1)} m</strong></span>
-        <span className="rounded bg-background/50 p-2">Contraste: <strong className="text-foreground">{out.cd.toFixed(2)}%</strong></span>
-        <span className="rounded bg-background/50 p-2">Geom.: <strong className="text-foreground">{formatKm(out.distancia_geometrica_max_km)}</strong></span>
-        <span className="rounded bg-background/50 p-2">Atmos.: <strong className="text-foreground">{formatKm(out.distancia_atmosferica_max_km)}</strong></span>
+        <span className="rounded bg-background/50 p-2">Transmissão: <strong className="text-foreground">{formatPct(transmission * 100)}</strong></span>
+        <span className="rounded bg-background/50 p-2">θ real: <strong className="text-foreground">{out.theta.toFixed(4)}°</strong></span>
+        <span className="rounded bg-background/50 p-2">Atmos.: <strong className="text-foreground">{formatAtmosphericKm(out.distancia_atmosferica_max_km)}</strong></span>
       </div>
     </div>
   );
@@ -257,6 +270,7 @@ const Index = () => {
 
   const out = useMemo(() => calculate(inputs), [inputs]);
   const compareOut = useMemo(() => calculate(compareInputs), [compareInputs]);
+  const atmosphericTransmission = getAtmosphericTransmission(inputs, out);
   const visibilityCopy = VISIBILITY_COPY[out.visibilityReason];
 
   return (
@@ -275,8 +289,9 @@ const Index = () => {
           <div className="flex flex-wrap gap-3">
             <MetricCard label="Oculto (m)" value={out.h_oculta.toFixed(1)} color="destructive" />
             <MetricCard label="Visível (m)" value={out.h_visivel.toFixed(1)} color={out.h_visivel > 0 ? "success" : "destructive"} />
-            <MetricCard label="Ocup. Horizontal" value={`${out.alpha.toFixed(2)}°`} color="accent" />
-            <MetricCard label="Ocup. Vertical" value={`${out.theta.toFixed(3)}°`} color="accent" />
+            <MetricCard label="θ real" value={`${out.theta.toFixed(4)}°`} color="accent" />
+            <MetricCard label="Depressão" value={`${out.depressao_horizonte_deg.toFixed(4)}°`} color="warning" />
+            <MetricCard label="Transmissão" value={formatPct(atmosphericTransmission * 100)} color={out.isVisible ? "success" : "warning"} />
             <MetricCard label="Prob. Detecção" value={out.isVisible ? `${out.prob_pct.toFixed(1)}%` : "0.0%"} color={out.isVisible ? "accent" : "destructive"} />
           </div>
         </header>
@@ -308,18 +323,22 @@ const Index = () => {
                   <span className={`inline-flex rounded-full border px-2 py-1 text-[0.65rem] font-bold uppercase ${visibilityCopy.badge}`}>{visibilityCopy.title}</span>
                   <p className="mt-2 text-sm text-muted-foreground">{visibilityCopy.body}</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs min-w-[320px]">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs min-w-[420px]">
                   <div className="rounded bg-secondary/60 p-3">
                     <span className="text-muted-foreground">Limite geométrico</span>
                     <strong className="block text-foreground text-base">{formatKm(out.distancia_geometrica_max_km)}</strong>
                   </div>
                   <div className="rounded bg-secondary/60 p-3">
                     <span className="text-muted-foreground">Limite atmosférico</span>
-                    <strong className="block text-foreground text-base">{formatKm(out.distancia_atmosferica_max_km)}</strong>
+                    <strong className="block text-foreground text-base">{formatAtmosphericKm(out.distancia_atmosferica_max_km)}</strong>
                   </div>
                   <div className="rounded bg-secondary/60 p-3">
                     <span className="text-muted-foreground">Limitante</span>
                     <strong className="block text-foreground text-base">{LIMITING_FACTOR_COPY[out.limitingFactor]}</strong>
+                  </div>
+                  <div className="rounded bg-secondary/60 p-3">
+                    <span className="text-muted-foreground">Escala angular</span>
+                    <strong className="block text-foreground text-base">Sol/Lua ≈ 0,5°</strong>
                   </div>
                 </div>
               </div>
@@ -388,7 +407,7 @@ const Index = () => {
           <div>
             <h2 className="text-sm font-bold text-foreground">Renderização dos canvases</h2>
             <p className="text-xs text-muted-foreground">
-              Por padrão, os gráficos redesenham apenas quando os parâmetros mudam. Ligue a animação somente quando quiser ver os rotores girando.
+              Por padrão, os gráficos redesenham apenas quando parâmetros ou tamanho mudam. A névoa visual usa transmissão atmosférica proporcional a e^-βd.
             </p>
           </div>
           <label className="inline-flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
@@ -403,19 +422,22 @@ const Index = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <FOVCanvas alpha={out.alpha} isVisible={out.isVisible} animate={animateCanvases} />
+          <FOVCanvas alpha={out.alpha} isVisible={out.isVisible} atmosphericTransmission={atmosphericTransmission} animate={animateCanvases} />
           <ProfileCanvas
             dist_km={inputs.dist_km}
             h_turbina={inputs.h_turbina}
             h_oculta={out.h_oculta}
             h_visivel={out.h_visivel}
             isVisible={out.isVisible}
+            atmosphericTransmission={atmosphericTransmission}
             animate={animateCanvases}
           />
         </div>
 
         <VerticalFOVCanvas
           theta={out.theta}
+          thetaAproximado={out.theta_aproximado}
+          depressaoHorizonteDeg={out.depressao_horizonte_deg}
           alpha={out.alpha}
           largura_km={inputs.largura_km}
           h_visivel={out.h_visivel}
@@ -423,6 +445,7 @@ const Index = () => {
           h_turbina={inputs.h_turbina}
           dist_km={inputs.dist_km}
           isVisible={out.isVisible}
+          atmosphericTransmission={atmosphericTransmission}
           animate={animateCanvases}
         />
 

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
+import { clamp, useCanvasRenderer, type CanvasSize } from "@/hooks/useCanvasRenderer";
 
 interface ProfileCanvasProps {
   dist_km: number;
@@ -6,196 +7,170 @@ interface ProfileCanvasProps {
   h_oculta: number;
   h_visivel: number;
   isVisible: boolean;
+  atmosphericTransmission?: number;
   animate?: boolean;
 }
 
-const setupCanvas = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, rect.width);
-  const height = Math.max(1, rect.height);
-  const nextWidth = Math.round(width * dpr);
-  const nextHeight = Math.round(height * dpr);
-
-  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-    canvas.width = nextWidth;
-    canvas.height = nextHeight;
-  }
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { width, height };
-};
-
-const ProfileCanvas = ({ dist_km, h_turbina, h_oculta, h_visivel, isVisible, animate = false }: ProfileCanvasProps) => {
+const ProfileCanvas = ({
+  dist_km,
+  h_turbina,
+  h_oculta,
+  h_visivel,
+  isVisible,
+  atmosphericTransmission = 1,
+  animate = false,
+}: ProfileCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return undefined;
+  const draw = useCallback((ctx: CanvasRenderingContext2D, { width: w, height: h }: CanvasSize, time: number) => {
+    const padX = 60;
+    const startX = padX;
+    const endX = w - padX;
+    const drawW = endX - startX;
+    const baseY = h - 70;
+    const maxH = Math.max(h_turbina, h_oculta + 20, 50);
+    const scaleY = (baseY - 60) / maxH;
+    const curvatureDrop = h_oculta * scaleY;
+    const seaStartY = baseY + 5;
+    const seaEndY = baseY + curvatureDrop;
+    const observerEyeY = baseY - 15;
+    const turbineTopY = seaEndY - h_turbina * scaleY;
+    const visibleTopY = observerEyeY - h_visivel * scaleY;
+    const bladePhase = animate ? time * 0.0008 : -Math.PI / 2;
+    const transmission = clamp(atmosphericTransmission, 0, 1);
+    const fogOpacity = clamp(1 - transmission, 0, 0.82);
+    const visibleOpacity = isVisible ? clamp(0.22 + transmission * 0.78, 0.22, 1) : 0.25;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return undefined;
+    ctx.clearRect(0, 0, w, h);
 
-    let frameId: number | null = null;
-    let disposed = false;
+    ctx.beginPath();
+    ctx.moveTo(startX, seaStartY);
+    ctx.quadraticCurveTo(startX + drawW * 0.6, baseY - Math.min(curvatureDrop * 0.15, 8), endX, seaEndY);
+    ctx.lineTo(endX, h);
+    ctx.lineTo(startX, h);
+    ctx.closePath();
+    const seaGrad = ctx.createLinearGradient(0, baseY, 0, h);
+    seaGrad.addColorStop(0, "hsla(210, 40%, 18%, 0.95)");
+    seaGrad.addColorStop(1, "hsl(210, 35%, 8%)");
+    ctx.fillStyle = seaGrad;
+    ctx.fill();
 
-    const draw = (time = 0) => {
-      const { width: w, height: h } = setupCanvas(canvas, ctx);
-      const padX = 60;
-      const startX = padX;
-      const endX = w - padX;
-      const drawW = endX - startX;
-      const baseY = h - 70;
-      const maxH = Math.max(h_turbina, h_oculta + 20, 50);
-      const scaleY = (baseY - 60) / maxH;
-      const curvatureDrop = h_oculta * scaleY;
-      const seaStartY = baseY + 5;
-      const seaEndY = baseY + curvatureDrop;
-      const observerEyeY = baseY - 15;
-      const turbineTopY = seaEndY - h_turbina * scaleY;
-      const visibleTopY = observerEyeY - h_visivel * scaleY;
-      const bladePhase = animate ? time * 0.0008 : -Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, seaStartY);
+    ctx.quadraticCurveTo(startX + drawW * 0.6, baseY - Math.min(curvatureDrop * 0.15, 8), endX, seaEndY);
+    ctx.strokeStyle = "hsl(210, 30%, 28%)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-      ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.moveTo(startX, observerEyeY);
+    ctx.lineTo(endX, observerEyeY);
+    ctx.strokeStyle = "hsl(210, 80%, 63%)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
+    ctx.fillStyle = "hsl(210, 80%, 63%)";
+    ctx.font = "10px Inter, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Linha de visão do observador", startX + 20, observerEyeY - 6);
+
+    if (h_turbina > 0) {
       ctx.beginPath();
-      ctx.moveTo(startX, seaStartY);
-      ctx.quadraticCurveTo(startX + drawW * 0.6, baseY - Math.min(curvatureDrop * 0.15, 8), endX, seaEndY);
-      ctx.lineTo(endX, h);
-      ctx.lineTo(startX, h);
-      ctx.closePath();
-      const seaGrad = ctx.createLinearGradient(0, baseY, 0, h);
-      seaGrad.addColorStop(0, "hsla(210, 40%, 18%, 0.95)");
-      seaGrad.addColorStop(1, "hsl(210, 35%, 8%)");
-      ctx.fillStyle = seaGrad;
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(startX, seaStartY);
-      ctx.quadraticCurveTo(startX + drawW * 0.6, baseY - Math.min(curvatureDrop * 0.15, 8), endX, seaEndY);
-      ctx.strokeStyle = "hsl(210, 30%, 28%)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(startX, observerEyeY);
-      ctx.lineTo(endX, observerEyeY);
-      ctx.strokeStyle = "hsl(210, 80%, 63%)";
+      ctx.moveTo(endX, seaEndY);
+      ctx.lineTo(endX, turbineTopY);
+      ctx.strokeStyle = "hsla(240, 5%, 65%, 0.22)";
       ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
+      ctx.setLineDash([2, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (h_oculta > 0) {
+      ctx.beginPath();
+      ctx.moveTo(endX, seaEndY);
+      ctx.lineTo(endX, Math.min(seaEndY, observerEyeY));
+      ctx.strokeStyle = "hsl(0, 72%, 55%)";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([4, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      ctx.fillStyle = "hsl(210, 80%, 63%)";
-      ctx.font = "10px Inter, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("Linha de Visão do Observador", startX + 20, observerEyeY - 6);
+      ctx.fillStyle = "hsl(0, 72%, 60%)";
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`${h_oculta.toFixed(1)} m oculto`, endX - 10, (seaEndY + Math.min(seaEndY, observerEyeY)) / 2);
+    }
 
-      if (h_oculta > 0) {
-        ctx.beginPath();
-        ctx.moveTo(endX, seaEndY);
-        ctx.lineTo(endX, Math.min(seaEndY, observerEyeY));
-        ctx.strokeStyle = "hsl(0, 72%, 55%)";
-        ctx.lineWidth = 4;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = "hsl(0, 72%, 60%)";
-        ctx.font = "bold 9px Inter, sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(`${h_oculta.toFixed(1)} m oculto`, endX - 10, (seaEndY + Math.min(seaEndY, observerEyeY)) / 2);
-      }
-
-      if (h_visivel > 0) {
-        ctx.beginPath();
-        ctx.moveTo(endX, observerEyeY);
-        ctx.lineTo(endX, visibleTopY);
-        ctx.strokeStyle = "hsl(152, 82%, 42%)";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(endX, visibleTopY, 8, 0, Math.PI * 2);
-        ctx.fillStyle = "hsl(152, 82%, 42%)";
-        ctx.fill();
-
-        for (let b = 0; b < 3; b++) {
-          const angle = (b * Math.PI * 2) / 3 + bladePhase;
-          ctx.beginPath();
-          ctx.moveTo(endX, visibleTopY);
-          ctx.lineTo(endX + Math.cos(angle) * 18, visibleTopY + Math.sin(angle) * 18);
-          ctx.strokeStyle = "hsla(152, 82%, 42%, 0.7)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-
-        ctx.fillStyle = "hsl(152, 82%, 50%)";
-        ctx.font = "bold 9px Inter, sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(`${h_visivel.toFixed(1)} m visível`, endX - 10, visibleTopY + 4);
-      }
-
-      if (h_turbina > 0) {
-        ctx.beginPath();
-        ctx.moveTo(endX, seaEndY);
-        ctx.lineTo(endX, turbineTopY);
-        ctx.strokeStyle = "hsla(240, 5%, 50%, 0.2)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      ctx.fillStyle = "hsl(240, 5%, 85%)";
+    if (h_visivel > 0) {
+      ctx.save();
+      ctx.globalAlpha = visibleOpacity;
       ctx.beginPath();
-      ctx.arc(startX, baseY - 18, 5, 0, Math.PI * 2);
+      ctx.moveTo(endX, observerEyeY);
+      ctx.lineTo(endX, visibleTopY);
+      ctx.strokeStyle = isVisible ? "hsl(152, 82%, 42%)" : "hsl(240, 5%, 68%)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(endX, visibleTopY, 8, 0, Math.PI * 2);
+      ctx.fillStyle = isVisible ? "hsl(152, 82%, 42%)" : "hsl(240, 5%, 68%)";
       ctx.fill();
-      ctx.fillRect(startX - 4, baseY - 10, 8, 15);
 
+      for (let b = 0; b < 3; b++) {
+        const angle = (b * Math.PI * 2) / 3 + bladePhase;
+        ctx.beginPath();
+        ctx.moveTo(endX, visibleTopY);
+        ctx.lineTo(endX + Math.cos(angle) * 18, visibleTopY + Math.sin(angle) * 18);
+        ctx.strokeStyle = isVisible ? "hsla(152, 82%, 42%, 0.72)" : "hsla(240, 5%, 68%, 0.55)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.fillStyle = isVisible ? "hsl(152, 82%, 50%)" : "hsl(240, 5%, 70%)";
+      ctx.font = "bold 9px Inter, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`${h_visivel.toFixed(1)} m visível`, endX - 10, visibleTopY + 4);
+    }
+
+    if (fogOpacity > 0.02) {
+      ctx.fillStyle = `hsla(205, 35%, 82%, ${fogOpacity * 0.58})`;
+      ctx.fillRect(startX, 35, drawW, baseY - 20);
+      ctx.fillStyle = "hsl(205, 35%, 84%)";
+      ctx.font = "bold 11px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillStyle = "hsl(240, 4%, 50%)";
-      ctx.font = "10px Inter, sans-serif";
-      ctx.fillText("Observador", startX, h - 18);
-      ctx.fillText(`${dist_km} km`, (startX + endX) / 2, h - 8);
-      if (h_turbina > 0) ctx.fillText("Turbina", endX, h - 18);
+      ctx.fillText(`Névoa: transmissão ${(transmission * 100).toFixed(0)}%`, w / 2, 52);
+    }
 
-      if (h_visivel > 0 && !isVisible) {
-        ctx.fillStyle = "hsla(210, 20%, 10%, 0.75)";
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = "hsl(0, 72%, 63%)";
-        ctx.font = "bold 13px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("ATENUADO PELA NÉVOA ATMOSFÉRICA", w / 2, h / 2);
-      }
+    ctx.fillStyle = "hsl(240, 5%, 85%)";
+    ctx.beginPath();
+    ctx.arc(startX, baseY - 18, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(startX - 4, baseY - 10, 8, 15);
 
-      if (h_visivel <= 0 && h_turbina > 0) {
-        ctx.fillStyle = "hsl(0, 72%, 60%)";
-        ctx.font = "bold 12px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("TURBINA 100% OCULTA PELA CURVATURA", w / 2, 40);
-      }
+    ctx.textAlign = "center";
+    ctx.fillStyle = "hsl(240, 4%, 55%)";
+    ctx.font = "10px Inter, sans-serif";
+    ctx.fillText("Observador", startX, h - 18);
+    ctx.fillText(`${dist_km.toFixed(1)} km`, (startX + endX) / 2, h - 8);
+    if (h_turbina > 0) ctx.fillText("Turbina", endX, h - 18);
 
-      if (animate && !disposed) {
-        frameId = requestAnimationFrame(draw);
-      }
-    };
+    if (h_visivel <= 0 && h_turbina > 0) {
+      ctx.fillStyle = "hsl(0, 72%, 60%)";
+      ctx.font = "bold 12px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("TURBINA 100% OCULTA PELA CURVATURA", w / 2, 40);
+    } else if (h_visivel > 0 && !isVisible) {
+      ctx.fillStyle = "hsl(0, 72%, 63%)";
+      ctx.font = "bold 12px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("GEOMETRIA VISÍVEL, MAS CONTRASTE ABAIXO DO LIMIAR", w / 2, h / 2);
+    }
+  }, [animate, atmosphericTransmission, dist_km, h_oculta, h_turbina, h_visivel, isVisible]);
 
-    const render = () => {
-      if (frameId !== null) cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(draw);
-    };
-
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(render);
-    resizeObserver?.observe(canvas);
-    render();
-
-    return () => {
-      disposed = true;
-      if (frameId !== null) cancelAnimationFrame(frameId);
-      resizeObserver?.disconnect();
-    };
-  }, [dist_km, h_turbina, h_oculta, h_visivel, isVisible, animate]);
+  useCanvasRenderer(canvasRef, draw, animate);
 
   return (
     <div className="bg-card border border-border rounded-lg p-5 flex flex-col items-center panel-glow">
