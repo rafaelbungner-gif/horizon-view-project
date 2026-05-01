@@ -1,18 +1,58 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface VerticalFOVCanvasProps {
-  theta: number; // ângulo vertical visível (graus)
-  alpha: number; // ocupação horizontal do parque (graus)
+  theta: number;
+  alpha: number;
   largura_km: number;
   h_visivel: number;
   h_oculta: number;
   h_turbina: number;
   dist_km: number;
   isVisible: boolean;
+  animate?: boolean;
 }
 
-const FOV_VERTICAL = 60; // graus úteis de visão vertical humana
-const FOV_HORIZONTAL = 60; // graus exibidos na janela POV horizontalmente
+const FOV_VERTICAL = 60;
+const FOV_HORIZONTAL = 60;
+const TURBINE_SPACING_KM = 1.2;
+
+const setupCanvas = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+  const nextWidth = Math.round(width * dpr);
+  const nextHeight = Math.round(height * dpr);
+
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { width, height };
+};
+
+const drawRoundedRect = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) => {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+};
 
 const VerticalFOVCanvas = ({
   theta,
@@ -23,29 +63,22 @@ const VerticalFOVCanvas = ({
   h_turbina,
   dist_km,
   isVisible,
+  animate = false,
 }: VerticalFOVCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return undefined;
+
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return undefined;
 
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const w = rect.width;
-      const h = rect.height;
-      ctx.clearRect(0, 0, w, h);
+    let frameId: number | null = null;
+    let disposed = false;
 
-      // Margens (top maior para a régua horizontal)
+    const draw = (time = 0) => {
+      const { width: w, height: h } = setupCanvas(canvas, ctx);
       const marginL = 56;
       const marginR = 24;
       const marginT = 52;
@@ -56,8 +89,19 @@ const VerticalFOVCanvas = ({
       const pxPerDegV = viewH / FOV_VERTICAL;
       const pxPerDegH = viewW / FOV_HORIZONTAL;
       const centerX = marginL + viewW / 2;
+      const thetaPx = theta * pxPerDegV;
+      const drawnThetaPx = theta > 0 ? Math.max(thetaPx, 8) : 0;
+      const alphaPxFull = alpha * pxPerDegH;
+      const parkLeft = Math.max(centerX - alphaPxFull / 2, marginL);
+      const parkRight = Math.min(centerX + alphaPxFull / 2, marginL + viewW);
+      const overflowsFOV = alpha > FOV_HORIZONTAL;
+      const distM = Math.max(dist_km * 1000, 1);
+      const hiddenDeg = (Math.atan(h_oculta / distM) * 180) / Math.PI;
+      const hiddenPx = Math.min(hiddenDeg * pxPerDegV, viewH / 2 - 4);
+      const bladePhase = animate ? time * 0.0015 : -Math.PI / 2;
 
-      // ===== Fundo: céu (cima) e mar (baixo)
+      ctx.clearRect(0, 0, w, h);
+
       const skyGrad = ctx.createLinearGradient(0, marginT, 0, horizonY);
       skyGrad.addColorStop(0, "hsl(215 50% 12%)");
       skyGrad.addColorStop(1, "hsl(210 60% 28%)");
@@ -70,7 +114,6 @@ const VerticalFOVCanvas = ({
       ctx.fillStyle = seaGrad;
       ctx.fillRect(marginL, horizonY, viewW, viewH / 2);
 
-      // ===== Régua angular vertical (lateral)
       ctx.font = "10px Inter, sans-serif";
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
@@ -88,7 +131,6 @@ const VerticalFOVCanvas = ({
         }
       }
 
-      // ===== Régua angular horizontal (topo)
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
       for (let deg = -30; deg <= 30; deg += 5) {
@@ -105,7 +147,6 @@ const VerticalFOVCanvas = ({
         }
       }
 
-      // ===== Linha do horizonte
       ctx.beginPath();
       ctx.moveTo(marginL, horizonY);
       ctx.lineTo(marginL + viewW, horizonY);
@@ -121,50 +162,21 @@ const VerticalFOVCanvas = ({
       ctx.textBaseline = "bottom";
       ctx.fillText("HORIZONTE", marginL + 6, horizonY - 4);
 
-      // ===== Moldura
       ctx.strokeStyle = "hsl(240 4% 25%)";
       ctx.lineWidth = 1;
       ctx.strokeRect(marginL, marginT, viewW, viewH);
 
-      // ===== FOV info (topo direito)
-      ctx.fillStyle = "hsl(240 4% 55%)";
-      ctx.font = "10px Inter, sans-serif";
-      ctx.textAlign = "right";
-      ctx.textBaseline = "top";
-      ctx.fillText(`FOV ${FOV_HORIZONTAL}°H × ${FOV_VERTICAL}°V`, marginL + viewW - 4, marginT + 4);
+      ctx.fillStyle = isVisible ? "hsla(142, 71%, 60%, 0.10)" : "hsla(240, 5%, 60%, 0.10)";
+      ctx.fillRect(parkLeft, horizonY - Math.max(drawnThetaPx, 12) - 6, Math.max(0, parkRight - parkLeft), Math.max(drawnThetaPx, 12) + 6);
 
-      // ===== Faixa angular do parque (α) - destaque no horizonte
-      const alphaPxFull = alpha * pxPerDegH;
-      const alphaPxClamped = Math.min(alphaPxFull, viewW);
-      const parkLeft = Math.max(centerX - alphaPxFull / 2, marginL);
-      const parkRight = Math.min(centerX + alphaPxFull / 2, marginL + viewW);
-      const overflowsFOV = alpha > FOV_HORIZONTAL;
-
-      // Faixa de destaque (sutil) cobrindo a região do parque no céu próximo ao horizonte
-      const bandColor = isVisible
-        ? "hsla(142, 71%, 60%, 0.10)"
-        : "hsla(240, 5%, 60%, 0.10)";
-      ctx.fillStyle = bandColor;
-      const previewThetaPx = Math.max(theta * pxPerDegV, 12);
-      const bandTop = horizonY - previewThetaPx - 6;
-      const bandH = horizonY - bandTop;
-      ctx.fillRect(parkLeft, bandTop, parkRight - parkLeft, bandH);
-
-      // ===== Desenho de uma turbina (helper)
-      const drawTurbine = (
-        x: number,
-        baseY: number,
-        topY: number,
-        opts: { isHidden?: boolean; alpha?: number; scale?: number } = {},
-      ) => {
-        const { isHidden = false, alpha: a = 1, scale = 1 } = opts;
+      const drawTurbine = (x: number, baseY: number, topY: number, hidden = false, opacity = 1) => {
         const towerH = baseY - topY;
         if (towerH <= 0) return;
-        const towerWBase = Math.max(2, towerH * 0.06) * scale;
-        const towerWTop = Math.max(1.5, towerH * 0.03) * scale;
 
-        ctx.globalAlpha = a;
-
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        const towerWBase = Math.max(2, towerH * 0.06);
+        const towerWTop = Math.max(1.5, towerH * 0.03);
         ctx.beginPath();
         ctx.moveTo(x - towerWBase / 2, baseY);
         ctx.lineTo(x - towerWTop / 2, topY);
@@ -172,288 +184,71 @@ const VerticalFOVCanvas = ({
         ctx.lineTo(x + towerWBase / 2, baseY);
         ctx.closePath();
 
-        if (isHidden) {
+        if (hidden) {
           ctx.strokeStyle = "hsl(0 72% 63%)";
           ctx.lineWidth = 1;
           ctx.setLineDash([3, 3]);
           ctx.stroke();
           ctx.setLineDash([]);
-        } else {
-          ctx.fillStyle = isVisible ? "hsl(142 71% 75%)" : "hsl(240 5% 60%)";
-          ctx.fill();
+          ctx.restore();
+          return;
+        }
 
-          const nacelleR = Math.max(2, towerH * 0.05) * scale;
+        ctx.fillStyle = isVisible ? "hsl(142 71% 75%)" : "hsl(240 5% 60%)";
+        ctx.fill();
+
+        const nacelleR = Math.max(2, towerH * 0.05);
+        ctx.beginPath();
+        ctx.arc(x, topY, nacelleR, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bladeLen = Math.max(8, towerH * 0.4);
+        ctx.strokeStyle = isVisible ? "hsl(142 71% 75%)" : "hsl(240 5% 60%)";
+        ctx.lineWidth = Math.max(1.2, towerH * 0.02);
+        ctx.lineCap = "round";
+        for (let b = 0; b < 3; b++) {
+          const angle = bladePhase + x * 0.01 + (b * Math.PI * 2) / 3;
           ctx.beginPath();
-          ctx.arc(x, topY, nacelleR, 0, Math.PI * 2);
-          ctx.fill();
-
-          const bladeLen = Math.max(8, towerH * 0.4) * scale;
-          const rot = Date.now() * 0.0015 + x * 0.01;
-          ctx.strokeStyle = isVisible ? "hsl(142 71% 75%)" : "hsl(240 5% 60%)";
-          ctx.lineWidth = Math.max(1.2, towerH * 0.02) * scale;
-          ctx.lineCap = "round";
-          for (let b = 0; b < 3; b++) {
-            const ang = rot + (b * Math.PI * 2) / 3;
-            ctx.beginPath();
-            ctx.moveTo(x, topY);
-            ctx.lineTo(x + Math.cos(ang) * bladeLen, topY + Math.sin(ang) * bladeLen);
-            ctx.stroke();
-          }
+          ctx.moveTo(x, topY);
+          ctx.lineTo(x + Math.cos(angle) * bladeLen, topY + Math.sin(angle) * bladeLen);
+          ctx.stroke();
         }
-
-        ctx.globalAlpha = 1;
+        ctx.restore();
       };
 
-      // ===== Múltiplas turbinas distribuídas em α
-      const thetaPx = theta * pxPerDegV;
+      if (h_visivel > 0 && theta > 0) {
+        const turbineCount = Math.max(2, Math.min(15, Math.round(largura_km / TURBINE_SPACING_KM)));
+        const alphaPxForSpacing = alpha > 0 ? alpha * pxPerDegH : viewW;
+        const spacingPx = alphaPxForSpacing / Math.max(turbineCount - 1, 1);
+        const maxTowerH = Math.max(8, spacingPx * 0.8);
+        const towerH = Math.min(Math.max(drawnThetaPx, 8), maxTowerH);
 
-      // Espaçamento offshore típico (km) entre turbinas — ajustado p/ parques modernos
-      const espacamentoKm = 1.2;
-      // Nº fracionário de turbinas baseado na largura — usado p/ fade-in suave dos extremos
-      const Nfrac = Math.max(2, Math.min(15, largura_km / espacamentoKm));
-      const NfracClamped = Nfrac;
-      const Nfloor = Math.max(2, Math.floor(NfracClamped));
-      const fadeFrac = Math.min(1, Math.max(0, NfracClamped - Nfloor)); // 0..1
-      // Nº efetivo desenhado: Nfloor + 2 extras (um em cada ponta) com fade
-      const hasFadeExtras = fadeFrac > 0.001 && Nfloor < 15;
-      const N = hasFadeExtras ? Nfloor + 2 : Nfloor;
-
-      // Espaçamento real entre turbinas (px) e escala adaptativa
-      const alphaPxForSpacing = alpha > 0 ? alpha * pxPerDegH : viewW;
-      const spacingPx = alphaPxForSpacing / Math.max(N - 1, 1);
-      // Mínimo de leitura encolhe quando turbinas estão apertadas (smooth)
-      const minLeitura = Math.max(6, Math.min(18, spacingPx * 0.35));
-      // Largura máxima por turbina deixa 30% de respiro entre vizinhas
-      const maxTurbineWidth = spacingPx * 0.7;
-      // Pás ocupam ~0.4 * towerH de cada lado → largura total ~0.85 * towerH
-      const maxTowerHraw = maxTurbineWidth / 0.85;
-      const maxTowerH = Math.max(minLeitura, maxTowerHraw);
-      // Smoothstep para suavizar a interpolação entre min e max conforme thetaPx cresce
-      const smoothstep = (edge0: number, edge1: number, x: number) => {
-        if (edge1 <= edge0) return x >= edge1 ? 1 : 0;
-        const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-        return t * t * (3 - 2 * t);
-      };
-      // Interpolação suave: quando thetaPx está entre min e max, evita salto duro
-      const tSmooth = smoothstep(minLeitura * 0.5, maxTowerH, thetaPx);
-      const drawnPx = minLeitura + (maxTowerH - minLeitura) * tSmooth;
-
-      // Distribui dentro da faixa angular α; se overflow, ainda assim posiciona
-      // dentro da viewport (alguns ficarão clipados nas bordas).
-      // positions[i] + opacityMul[i] permitem fade nas pontas
-      const positions: number[] = [];
-      const opacityMul: number[] = [];
-      if (N === 1) {
-        positions.push(centerX);
-        opacityMul.push(1);
-      } else {
-        for (let i = 0; i < N; i++) {
-          const t = i / (N - 1); // 0..1
+        for (let i = 0; i < turbineCount; i++) {
+          const t = turbineCount === 1 ? 0.5 : i / (turbineCount - 1);
           const deg = -alpha / 2 + t * alpha;
-          positions.push(centerX + deg * pxPerDegH);
-          // turbinas extras (primeira e última) recebem fade proporcional a fadeFrac
-          if (hasFadeExtras && (i === 0 || i === N - 1)) {
-            opacityMul.push(fadeFrac);
-          } else {
-            opacityMul.push(1);
-          }
-        }
-      }
+          const x = centerX + deg * pxPerDegH;
+          if (x < marginL - 24 || x > marginL + viewW + 24) continue;
 
-      // Hidden segment (abaixo do horizonte) - calcula uma vez
-      const distM = Math.max(dist_km * 1000, 1);
-      const hiddenDeg = (Math.atan(h_oculta / distM) * 180) / Math.PI;
-      const hiddenPx = Math.min(hiddenDeg * pxPerDegV, viewH / 2 - 4);
-
-      if (theta > 0 && h_visivel > 0) {
-        positions.forEach((x, i) => {
-          // perspectiva atmosférica: turbinas das bordas mais transparentes
-          const distFromCenter = Math.abs(x - centerX) / (viewW / 2);
-          const aBase = 1 - Math.min(distFromCenter * 0.4, 0.4);
-          const a = aBase * opacityMul[i];
-          // só desenha se estiver visível na viewport
-          if (x < marginL - 20 || x > marginL + viewW + 20) return;
-          if (a < 0.02) return;
-          drawTurbine(x, horizonY, horizonY - drawnPx, { alpha: a });
+          const distanceFromCenter = Math.abs(x - centerX) / Math.max(viewW / 2, 1);
+          const opacity = 1 - Math.min(distanceFromCenter * 0.4, 0.4);
+          drawTurbine(x, horizonY, horizonY - towerH, false, opacity);
 
           if (h_oculta > 0 && hiddenPx > 1) {
-            drawTurbine(x, horizonY + hiddenPx, horizonY, { isHidden: true, alpha: a });
+            drawTurbine(x, horizonY + hiddenPx, horizonY, true, opacity);
           }
-        });
-
-        // ===== Legenda flutuante (canto superior esquerdo) — θ + α + área visível
-        const legendPad = 8;
-        const legendBarH = Math.max(drawnPx, 14);
-        const labelTheta = `θ = ${theta.toFixed(3)}°`;
-        const labelAlpha = `α = ${alpha.toFixed(2)}°`;
-        const labelArea = `Área visível: ${h_visivel.toFixed(1)} m × ${largura_km.toFixed(1)} km`;
-        const showMinNote = drawnPx > thetaPx + 1;
-        const minNote = "(escala mín. p/ leitura)";
-
-        // Medições
-        ctx.font = "bold 11px Inter, sans-serif";
-        const wTheta = ctx.measureText(labelTheta).width;
-        ctx.font = "10px Inter, sans-serif";
-        const wAlpha = ctx.measureText(labelAlpha).width;
-        ctx.font = "9px Inter, sans-serif";
-        const wArea = ctx.measureText(labelArea).width;
-        const wNote = showMinNote ? ctx.measureText(minNote).width : 0;
-        const textW = Math.max(wTheta, wAlpha, wArea, wNote);
-
-        const legendX = marginL + 12;
-        const legendTop = marginT + 12;
-        const legendBarX = legendX + legendPad;
-        const legendBarTop = legendTop + legendPad;
-        const legendBarBottom = legendBarTop + legendBarH;
-
-        // Mini-régua horizontal abaixo da θ — proporção visual de α (até 60° = barW)
-        const miniAlphaW = 56;
-        const miniAlphaFill = Math.min(1, alpha / FOV_HORIZONTAL) * miniAlphaW;
-
-        const boxW = legendPad * 2 + 14 + textW + 8;
-        const lineGap = 4;
-        const alphaRulerH = 8;
-        const boxH =
-          legendPad * 2 +
-          legendBarH +
-          lineGap +
-          12 + // alpha label line
-          alphaRulerH +
-          lineGap +
-          12 + // area line
-          (showMinNote ? 12 : 0);
-
-        // Fundo arredondado
-        ctx.fillStyle = "hsla(215, 50%, 12%, 0.82)";
-        const r = 6;
-        ctx.beginPath();
-        ctx.moveTo(legendX + r, legendTop);
-        ctx.lineTo(legendX + boxW - r, legendTop);
-        ctx.quadraticCurveTo(legendX + boxW, legendTop, legendX + boxW, legendTop + r);
-        ctx.lineTo(legendX + boxW, legendTop + boxH - r);
-        ctx.quadraticCurveTo(legendX + boxW, legendTop + boxH, legendX + boxW - r, legendTop + boxH);
-        ctx.lineTo(legendX + r, legendTop + boxH);
-        ctx.quadraticCurveTo(legendX, legendTop + boxH, legendX, legendTop + boxH - r);
-        ctx.lineTo(legendX, legendTop + r);
-        ctx.quadraticCurveTo(legendX, legendTop, legendX + r, legendTop);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "hsla(142, 71%, 60%, 0.4)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Mini-régua vertical (θ) com setas
-        ctx.strokeStyle = "hsl(142 71% 75%)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(legendBarX, legendBarTop);
-        ctx.lineTo(legendBarX, legendBarBottom);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(legendBarX - 4, legendBarTop + 4);
-        ctx.lineTo(legendBarX, legendBarTop);
-        ctx.lineTo(legendBarX + 4, legendBarTop + 4);
-        ctx.moveTo(legendBarX - 4, legendBarBottom - 4);
-        ctx.lineTo(legendBarX, legendBarBottom);
-        ctx.lineTo(legendBarX + 4, legendBarBottom - 4);
-        ctx.stroke();
-
-        // Label θ
-        ctx.fillStyle = "hsl(142 71% 80%)";
-        ctx.font = "bold 11px Inter, sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText(labelTheta, legendBarX + 8, legendBarTop + legendBarH / 2);
-
-        // Linha α (label + mini-régua horizontal)
-        let cursorY = legendBarBottom + lineGap;
-        ctx.fillStyle = "hsl(142 71% 80%)";
-        ctx.font = "10px Inter, sans-serif";
-        ctx.textBaseline = "top";
-        ctx.fillText(labelAlpha, legendX + legendPad, cursorY);
-        cursorY += 12;
-
-        // mini-régua horizontal α
-        const miniAlphaX = legendX + legendPad;
-        const miniAlphaY = cursorY + 2;
-        ctx.fillStyle = "hsl(240 4% 22%)";
-        ctx.fillRect(miniAlphaX, miniAlphaY, miniAlphaW, alphaRulerH - 4);
-        ctx.fillStyle = isVisible ? "hsl(142 71% 60%)" : "hsl(240 5% 60%)";
-        ctx.fillRect(miniAlphaX, miniAlphaY, miniAlphaFill, alphaRulerH - 4);
-        ctx.strokeStyle = "hsl(240 4% 40%)";
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(miniAlphaX, miniAlphaY, miniAlphaW, alphaRulerH - 4);
-        cursorY += alphaRulerH + lineGap;
-
-        // Linha área visível
-        ctx.fillStyle = "hsl(142 71% 80%)";
-        ctx.font = "9px Inter, sans-serif";
-        ctx.textBaseline = "top";
-        ctx.fillText(labelArea, legendX + legendPad, cursorY);
-        cursorY += 12;
-
-        if (showMinNote) {
-          ctx.fillStyle = "hsl(240 4% 65%)";
-          ctx.font = "9px Inter, sans-serif";
-          ctx.fillText(minNote, legendX + legendPad, cursorY);
         }
-      } else if (h_visivel <= 0) {
-        // Legenda compacta indicando 100% oculta
-        const legendX = marginL + 12;
-        const legendTop = marginT + 12;
-        const boxW = 180;
-        const boxH = 44;
-        ctx.fillStyle = "hsla(215, 50%, 12%, 0.82)";
-        const r = 6;
-        ctx.beginPath();
-        ctx.moveTo(legendX + r, legendTop);
-        ctx.lineTo(legendX + boxW - r, legendTop);
-        ctx.quadraticCurveTo(legendX + boxW, legendTop, legendX + boxW, legendTop + r);
-        ctx.lineTo(legendX + boxW, legendTop + boxH - r);
-        ctx.quadraticCurveTo(legendX + boxW, legendTop + boxH, legendX + boxW - r, legendTop + boxH);
-        ctx.lineTo(legendX + r, legendTop + boxH);
-        ctx.quadraticCurveTo(legendX, legendTop + boxH, legendX, legendTop + boxH - r);
-        ctx.lineTo(legendX, legendTop + r);
-        ctx.quadraticCurveTo(legendX, legendTop, legendX + r, legendTop);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "hsla(0, 72%, 63%, 0.5)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.fillStyle = "hsl(0 72% 70%)";
-        ctx.font = "bold 11px Inter, sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText("Área visível: 100% oculta", legendX + 10, legendTop + 8);
-        ctx.fillStyle = "hsl(240 4% 65%)";
-        ctx.font = "9px Inter, sans-serif";
-        ctx.fillText(`α = ${alpha.toFixed(2)}° · ${largura_km.toFixed(1)} km`, legendX + 10, legendTop + 24);
-      }
 
-      // ===== Indicador α (abaixo do horizonte)
-      if (alpha > 0 && h_visivel > 0) {
         const alphaY = horizonY + Math.max(hiddenPx, 0) + 18;
         const aLeft = Math.max(parkLeft, marginL + 2);
         const aRight = Math.min(parkRight, marginL + viewW - 2);
-
         ctx.strokeStyle = isVisible ? "hsl(142 71% 60%)" : "hsl(240 5% 60%)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(aLeft, alphaY);
         ctx.lineTo(aRight, alphaY);
         ctx.stroke();
-        // setas (ou "fora do FOV" indicators)
-        if (!overflowsFOV) {
-          ctx.beginPath();
-          ctx.moveTo(aLeft + 6, alphaY - 4);
-          ctx.lineTo(aLeft, alphaY);
-          ctx.lineTo(aLeft + 6, alphaY + 4);
-          ctx.moveTo(aRight - 6, alphaY - 4);
-          ctx.lineTo(aRight, alphaY);
-          ctx.lineTo(aRight - 6, alphaY + 4);
-          ctx.stroke();
-        } else {
-          // marcadores "continua além do FOV"
+
+        if (overflowsFOV) {
           ctx.fillStyle = "hsl(0 72% 63%)";
           ctx.font = "9px Inter, sans-serif";
           ctx.textAlign = "left";
@@ -462,19 +257,29 @@ const VerticalFOVCanvas = ({
           ctx.textAlign = "right";
           ctx.fillText("continua ▶", marginL + viewW - 4, alphaY);
         }
-
-        ctx.fillStyle = isVisible ? "hsl(142 71% 75%)" : "hsl(240 5% 70%)";
-        ctx.font = "bold 11px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText(
-          `α = ${alpha.toFixed(2)}°  ·  largura ≈ ${largura_km.toFixed(1)} km`,
-          centerX,
-          alphaY + 6,
-        );
       }
 
-      // ===== Mensagem se totalmente oculta
+      const legendX = marginL + 12;
+      const legendTop = marginT + 12;
+      const legendW = 230;
+      const legendH = 84;
+      ctx.fillStyle = "hsla(215, 50%, 12%, 0.84)";
+      drawRoundedRect(ctx, legendX, legendTop, legendW, legendH, 8);
+      ctx.fill();
+      ctx.strokeStyle = isVisible ? "hsla(142, 71%, 60%, 0.45)" : "hsla(0, 72%, 63%, 0.45)";
+      ctx.stroke();
+
+      ctx.fillStyle = isVisible ? "hsl(142 71% 80%)" : "hsl(0 72% 70%)";
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(isVisible ? "Turbinas detectáveis" : h_visivel > 0 ? "Bloqueio atmosférico" : "Ocultas pelo horizonte", legendX + 10, legendTop + 9);
+      ctx.font = "10px Inter, sans-serif";
+      ctx.fillStyle = "hsl(240 4% 70%)";
+      ctx.fillText(`θ = ${theta.toFixed(3)}° · α = ${alpha.toFixed(2)}°`, legendX + 10, legendTop + 30);
+      ctx.fillText(`Visível: ${h_visivel.toFixed(1)} m de ${h_turbina.toFixed(1)} m`, legendX + 10, legendTop + 47);
+      ctx.fillText(`Largura: ${largura_km.toFixed(1)} km · Distância: ${dist_km.toFixed(1)} km`, legendX + 10, legendTop + 64);
+
       if (h_visivel <= 0) {
         ctx.fillStyle = "hsl(0 72% 63%)";
         ctx.font = "bold 13px Inter, sans-serif";
@@ -491,128 +296,56 @@ const VerticalFOVCanvas = ({
         ctx.fillText("ATENUADO PELA NÉVOA", centerX, horizonY - 20);
       }
 
-      // ===== Lupa (zoom) quando θ < 0.5° — turbina central representativa
-      if (isVisible && theta > 0 && theta < 0.5) {
-        const lupaR = 56;
-        const lupaCx = marginL + viewW - lupaR - 12;
-        const lupaCy = marginT + viewH - lupaR - 12;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(lupaCx, lupaCy, lupaR, 0, Math.PI * 2);
-        ctx.fillStyle = "hsl(215 50% 12%)";
-        ctx.fill();
-        ctx.clip();
-
-        ctx.beginPath();
-        ctx.moveTo(lupaCx - lupaR, lupaCy);
-        ctx.lineTo(lupaCx + lupaR, lupaCy);
-        ctx.strokeStyle = "hsl(240 5% 70%)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 3]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        const zoom = 20;
-        const zoomedPx = Math.min(theta * pxPerDegV * zoom, lupaR * 1.6);
-        const zTopY = lupaCy - zoomedPx;
-        const zTowerH = lupaCy - zTopY;
-        const zTowerWBase = Math.max(2, zTowerH * 0.07);
-        const zTowerWTop = Math.max(1.5, zTowerH * 0.04);
-        ctx.beginPath();
-        ctx.moveTo(lupaCx - zTowerWBase / 2, lupaCy);
-        ctx.lineTo(lupaCx - zTowerWTop / 2, zTopY);
-        ctx.lineTo(lupaCx + zTowerWTop / 2, zTopY);
-        ctx.lineTo(lupaCx + zTowerWBase / 2, lupaCy);
-        ctx.closePath();
-        ctx.fillStyle = "hsl(142 71% 75%)";
-        ctx.fill();
-
-        const zNac = Math.max(2, zTowerH * 0.06);
-        ctx.beginPath();
-        ctx.arc(lupaCx, zTopY, zNac, 0, Math.PI * 2);
-        ctx.fill();
-
-        const zBlade = Math.max(8, zTowerH * 0.45);
-        const rot = Date.now() * 0.0015;
-        ctx.strokeStyle = "hsl(142 71% 75%)";
-        ctx.lineWidth = Math.max(1.2, zTowerH * 0.025);
-        ctx.lineCap = "round";
-        for (let b = 0; b < 3; b++) {
-          const ang = rot + (b * Math.PI * 2) / 3;
-          ctx.beginPath();
-          ctx.moveTo(lupaCx, zTopY);
-          ctx.lineTo(lupaCx + Math.cos(ang) * zBlade, zTopY + Math.sin(ang) * zBlade);
-          ctx.stroke();
-        }
-
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.arc(lupaCx, lupaCy, lupaR, 0, Math.PI * 2);
-        ctx.strokeStyle = "hsl(142 71% 75%)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = "hsl(142 71% 75%)";
-        ctx.font = "bold 9px Inter, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText("ZOOM 20× (turbina central)", lupaCx, lupaCy + lupaR + 4);
-      }
-
-      // ===== Barra de rodapé com duas métricas
       const barY = marginT + viewH + 22;
       const barH = 6;
       const halfW = (viewW - 16) / 2;
-
-      // Vertical
       ctx.fillStyle = "hsl(240 4% 18%)";
       ctx.fillRect(marginL, barY, halfW, barH);
-      const ratioV = Math.min(theta / FOV_VERTICAL, 1);
       ctx.fillStyle = isVisible ? "hsl(142 71% 60%)" : "hsl(0 72% 63%)";
-      ctx.fillRect(marginL, barY, Math.max(ratioV * halfW, theta > 0 ? 2 : 0), barH);
+      ctx.fillRect(marginL, barY, Math.max(Math.min(theta / FOV_VERTICAL, 1) * halfW, theta > 0 ? 2 : 0), barH);
       ctx.fillStyle = "hsl(240 4% 65%)";
       ctx.font = "9px Inter, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
-      ctx.fillText(
-        `Vertical θ: ${((theta / FOV_VERTICAL) * 100).toFixed(4)}% do FOV`,
-        marginL,
-        barY + barH + 3,
-      );
+      ctx.fillText(`Vertical θ: ${((theta / FOV_VERTICAL) * 100).toFixed(4)}% do FOV`, marginL, barY + barH + 3);
 
-      // Horizontal
       const barX2 = marginL + halfW + 16;
       ctx.fillStyle = "hsl(240 4% 18%)";
       ctx.fillRect(barX2, barY, halfW, barH);
-      const ratioH = Math.min(alpha / FOV_HORIZONTAL, 1);
       ctx.fillStyle = isVisible ? "hsl(142 71% 60%)" : "hsl(0 72% 63%)";
-      ctx.fillRect(barX2, barY, Math.max(ratioH * halfW, alpha > 0 ? 2 : 0), barH);
+      ctx.fillRect(barX2, barY, Math.max(Math.min(alpha / FOV_HORIZONTAL, 1) * halfW, alpha > 0 ? 2 : 0), barH);
       ctx.fillStyle = "hsl(240 4% 65%)";
-      ctx.fillText(
-        `Horizontal α: ${((alpha / FOV_HORIZONTAL) * 100).toFixed(2)}% do FOV${overflowsFOV ? " (excede!)" : ""}`,
-        barX2,
-        barY + barH + 3,
-      );
+      ctx.fillText(`Horizontal α: ${((alpha / FOV_HORIZONTAL) * 100).toFixed(2)}% do FOV${overflowsFOV ? " (excede)" : ""}`, barX2, barY + barH + 3);
 
-      rafRef.current = requestAnimationFrame(draw);
+      if (animate && !disposed) {
+        frameId = requestAnimationFrame(draw);
+      }
     };
 
-    rafRef.current = requestAnimationFrame(draw);
+    const render = () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(draw);
+    };
+
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(render);
+    resizeObserver?.observe(canvas);
+    render();
+
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      disposed = true;
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
     };
-  }, [theta, alpha, largura_km, h_visivel, h_oculta, h_turbina, dist_km, isVisible]);
+  }, [theta, alpha, largura_km, h_visivel, h_oculta, h_turbina, dist_km, isVisible, animate]);
 
   return (
     <div className="bg-card border border-border rounded-lg p-5 flex flex-col panel-glow">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
         <span className="text-xs font-bold tracking-[0.1em] text-muted-foreground uppercase">
           Simulação POV — Impacto Vertical (θ) + Largura do Parque (α)
         </span>
         <span className="text-[10px] text-muted-foreground">
-          Visão em primeira pessoa · FOV 60° × 60°
+          Render sob demanda · FOV 60° × 60°
         </span>
       </div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 400 }} />
