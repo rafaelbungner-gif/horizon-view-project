@@ -8,95 +8,71 @@ const TechnicalDocs = () => (
       Memorial de Cálculo e Referências
     </h2>
     <p className="text-muted-foreground text-sm mb-6">
-      O modelo matemático deste painel processa a intervisibilidade através de uma cascata lógica de três etapas: Topografia (eixo Z), Magnitude Paisagística (eixo X) e Dissolução Atmosférica (Opacidade).
+      O painel combina curvatura terrestre, refração atmosférica, atenuação de contraste e uma leitura angular corrigida pela depressão do horizonte quando o observador está elevado.
     </p>
 
-    <Section title="1. Filtragem Topográfica (Curvatura da Terra e Refração)">
-      <p>Define o limite físico da linha de visão. Calcula a parcela da estrutura que desaparece atrás da curvatura do planeta.</p>
+    <Section title="1. Curvatura da Terra e refração">
+      <p>O raio efetivo resume a refração atmosférica em um único fator <Math tex="k" />. A altura oculta só passa a crescer quando o alvo está além do horizonte do observador.</p>
       <DocCard>
-        <Math tex="d_{obs} = \sqrt{2 \cdot k \cdot R \cdot h_{obs}}" block />
-        <Math tex="h_{oculta} = \frac{(d - d_{obs})^2}{2 \cdot R \cdot k}" block />
-        <Math tex="h_{vis\acute{i}vel} = \max(0,\; h_{turbina} - h_{oculta})" block />
-        <p className="text-xs text-muted-foreground mt-3">
-          <strong className="text-foreground">Referência:</strong> NatureScot (2017). <em>Visual Representation of Wind Farms: Best Practice Guidance</em>.
-        </p>
+        <Math tex="R_{efetivo} = R \cdot k" block />
+        <Math tex="d_{obs} = \sqrt{2 \cdot R_{efetivo} \cdot h_{obs}}" block />
+        <Math tex="h_{oculta} = \frac{\max(0,\;d-d_{obs})^2}{2 \cdot R_{efetivo}}" block />
+        <Math tex="h_{visivel} = \max(0,\; h_{turbina} - h_{oculta})" block />
       </DocCard>
     </Section>
 
-    <Section title="2. Magnitude Paisagística (Ocupação Angular SVIA)">
-      <p>Se a estrutura desponta no horizonte (h_visível {'>'} 0), calcula-se a intrusão espacial geométrica no panorama de 180° do observador.</p>
+    <Section title="2. Ocupação angular e depressão do horizonte">
+      <p>O valor <Math tex="\theta_{geom}" /> mede a abertura angular da porção visível. Quando a turbina está além do horizonte do observador, o painel soma a depressão do horizonte para representar melhor a posição angular real no campo de visão.</p>
       <DocCard>
         <Math tex="\alpha = 2 \cdot \arctan\!\left(\frac{W}{2d}\right) \cdot \frac{180}{\pi}" block />
-        <Math tex="\theta = \arctan\!\left(\frac{h_{vis\acute{i}vel}}{d}\right) \cdot \frac{180}{\pi}" block />
+        <Math tex="\theta_{geom} = \arctan\!\left(\frac{h_{visivel}}{d}\right) \cdot \frac{180}{\pi}" block />
+        <Math tex="\delta_h = \arctan\!\left(\frac{d_{obs}}{2R_{efetivo}}\right) \cdot \frac{180}{\pi}" block />
+        <Math tex="\theta_{real} = \theta_{geom} + \delta_h" block />
         <p className="text-xs text-muted-foreground mt-3">
-          <strong className="text-foreground">Referência:</strong> Manchado, C. et al. (2017). <em>Method to estimate the visual impact of an offshore wind farm</em>.
+          A correção <Math tex="\delta_h" /> é aplicada apenas quando <Math tex="d > d_{obs}" /> e há altura visível.
         </p>
       </DocCard>
     </Section>
 
-    <Section title="3. Dissolução Atmosférica e Probabilidade Visual">
-      <p>Calcula a degradação da luz pela névoa marinha e o limiar de detecção da retina humana (linear-logit).</p>
+    <Section title="3. Atmosfera, contraste e alcance visual">
+      <p>O contraste remanescente segue um decaimento exponencial. Se o contraste inicial já estiver abaixo de 2%, o limite atmosférico é zero e a interface mostra o alvo como já invisível.</p>
       <DocCard>
-        <Math tex="S = M \cdot \left[\arctan\!\left(\frac{1}{d}\right) \cdot 60\right]^2" block />
         <Math tex="C_d = C_i \cdot e^{-\beta \cdot d}" block />
-        <Math tex="Z_{ud} = -16{,}02 + 0{,}0124 \cdot (C_d \cdot S) + 12{,}75" block />
-        <Math tex="P_{detec\c{c}\tilde{a}o} = \frac{1}{1 + e^{-Z_{ud}}} \times 100" block />
+        <Math tex="d_{limiar} = \frac{\ln(C_i/2)}{\beta}" block />
         <p className="text-xs text-muted-foreground mt-3">
-          <strong className="text-foreground">Referência:</strong> Bishop, I. D. (2002). <em>Determination of thresholds of visual impact: the case of wind turbines</em>.
+          Para <Math tex="\beta = 0" />, o alcance atmosférico é ilimitado. Para <Math tex="C_i < 2\%" />, o alcance atmosférico é <Math tex="0" />.
         </p>
       </DocCard>
     </Section>
 
-    <Section title="4. Justificativa dos Parâmetros (k e β)">
-      <DocCard accent="primary">
-        <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de Refração Atmosférica (k)</h4>
-        <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
-          <li><strong className="text-foreground">k = 1,00:</strong> Geometria pura (vácuo).</li>
-          <li><strong className="text-foreground">k = 1,13:</strong> Padrão usado em softwares GIS (ESRI, QGIS) para análises ZTV.</li>
-          <li><strong className="text-foreground">k = 1,17:</strong> Padrão NatureScot (2017) — recomendado para representação visual de parques eólicos.</li>
-        </ul>
-      </DocCard>
-      <DocCard accent="accent">
-        <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de Extinção Atmosférica (β)</h4>
-        <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
-          <li><strong className="text-foreground">β = 0,00004:</strong> Ar limpo (~97 km vis.).</li>
-          <li><strong className="text-foreground">β = 0,00008:</strong> Névoa leve (~48 km). Padrão Bishop (2002).</li>
-          <li><strong className="text-foreground">β = 0,00012:</strong> Névoa densa (~32 km).</li>
-        </ul>
+    <Section title="4. Probabilidade visual inspirada em Bishop (2002)">
+      <p>O código usa o modelo logístico univariado equivalente ao intercepto consolidado <Math tex="-3{,}27" />, evitando somar simultaneamente constantes de tabelas diferentes.</p>
+      <DocCard>
+        <Math tex="M = area \cdot 1{,}2" block />
+        <Math tex="S = M \cdot \left[\arctan\!\left(\frac{1}{d}\right) \cdot \frac{180}{\pi} \cdot 60\right]^2" block />
+        <Math tex="Z = -3{,}27 + 0{,}0124 \cdot (C_d \cdot S)" block />
+        <Math tex="P_{deteccao} = \frac{1}{1 + e^{-Z}} \times 100" block />
       </DocCard>
     </Section>
 
-    <Section title="5. Dicionário de Variáveis">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 text-foreground">Símbolo</th>
-              <th className="text-left py-2 px-3 text-foreground">Unidade</th>
-              <th className="text-left py-2 px-3 text-foreground">Descrição</th>
-            </tr>
-          </thead>
-          <tbody className="text-muted-foreground">
-            {[
-              ["d", "m", "Distância até a costa"],
-              ["h_{obs}", "m", "Elevação do observador"],
-              ["h_{turbina}", "m", "Altura máxima da turbina"],
-              ["R", "m", "Raio da Terra (6.371.000 m)"],
-              ["k", "—", "Coeficiente de refração"],
-              ["W", "m", "Largura do parque"],
-              ["M", "m²", "Área transversal percebida (×1.2)"],
-              ["C_i", "\\%", "Contraste inicial"],
-              ["\\beta", "—", "Coeficiente de extinção atmosférica"],
-              ["\\alpha / \\theta", "°", "Ângulos de abertura SVIA"],
-            ].map(([sym, unit, desc], i) => (
-              <tr key={i} className="border-b border-border/50">
-                <td className="py-2 px-3 font-bold text-accent"><Math tex={sym} /></td>
-                <td className="py-2 px-3"><Math tex={unit} /></td>
-                <td className="py-2 px-3">{desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <Section title="5. Parâmetros de referência">
+      <div className="grid gap-4 md:grid-cols-2">
+        <DocCard accent="primary">
+          <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de refração (k)</h4>
+          <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+            <li><strong className="text-foreground">k = 1,00:</strong> geometria pura.</li>
+            <li><strong className="text-foreground">k = 1,13:</strong> aproximação comum em análises GIS/ZTV.</li>
+            <li><strong className="text-foreground">k = 1,17:</strong> aproximação usada em diretrizes de visualização de parques eólicos.</li>
+          </ul>
+        </DocCard>
+        <DocCard accent="accent">
+          <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de extinção (β)</h4>
+          <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+            <li><strong className="text-foreground">β = 0,00004:</strong> ar limpo.</li>
+            <li><strong className="text-foreground">β = 0,00008:</strong> névoa leve.</li>
+            <li><strong className="text-foreground">β = 0,00012:</strong> névoa densa.</li>
+          </ul>
+        </DocCard>
       </div>
     </Section>
   </div>
