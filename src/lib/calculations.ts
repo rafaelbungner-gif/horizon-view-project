@@ -23,6 +23,8 @@ export interface CalcOutputs {
   h_visivel: number;
   alpha: number;
   theta: number;
+  theta_aproximado: number;
+  depressao_horizonte_deg: number;
   prob_pct: number;
   cd: number;
   isVisible: boolean;
@@ -38,6 +40,8 @@ export interface CalcOutputs {
 export const EARTH_RADIUS_M = 6_371_000;
 export const CONTRAST_THRESHOLD_PCT = 2.0;
 export const ROTOR_MOTION_AREA_FACTOR = 1.2;
+export const BISHOP_LOGIT_INTERCEPT = -3.27;
+export const BISHOP_LOGIT_SLOPE = 0.0124;
 
 const DEG_PER_RAD = 180 / Math.PI;
 const ARC_MINUTES_PER_DEGREE = 60;
@@ -119,7 +123,6 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
   const largura_m = largura_km * 1000;
   const effectiveEarthRadius = EARTH_RADIUS_M * k;
 
-  // Curvature is approximated with an effective Earth radius that includes refraction.
   const horizonte_obs = Math.sqrt(2 * effectiveEarthRadius * h_obs);
   const turbineTopHorizon = Math.sqrt(2 * effectiveEarthRadius * h_turbina);
   const distancia_geometrica_max_km = (horizonte_obs + turbineTopHorizon) / 1000;
@@ -137,18 +140,25 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
   const limitingFactor = getLimitingFactor(distancia_geometrica_max_km, distancia_atmosferica_max_km);
 
   let alpha = 0;
-  let theta = 0;
+  let theta_aproximado = 0;
+  let depressao_horizonte_deg = 0;
+
   if (h_visivel > 0) {
     alpha = 2 * Math.atan(largura_m / (2 * dist_m)) * DEG_PER_RAD;
-    theta = Math.atan(h_visivel / dist_m) * DEG_PER_RAD;
+    theta_aproximado = Math.atan(h_visivel / dist_m) * DEG_PER_RAD;
+    depressao_horizonte_deg = dist_m > horizonte_obs
+      ? Math.atan(horizonte_obs / (2 * effectiveEarthRadius)) * DEG_PER_RAD
+      : 0;
   }
+
+  const theta = theta_aproximado + depressao_horizonte_deg;
 
   let prob_pct = 0;
   if (isVisible && area > 0 && cd > 0) {
     const perceivedArea = area * ROTOR_MOTION_AREA_FACTOR;
     const oneMeterAngularMinutes = Math.atan(1 / dist_m) * DEG_PER_RAD * ARC_MINUTES_PER_DEGREE;
     const visualMagnitude = perceivedArea * Math.pow(oneMeterAngularMinutes, 2);
-    const logit = -16.02 + 0.0124 * (cd * visualMagnitude) + 12.75;
+    const logit = BISHOP_LOGIT_INTERCEPT + BISHOP_LOGIT_SLOPE * (cd * visualMagnitude);
     const probability = 1 / (1 + Math.exp(-logit));
     prob_pct = clamp(probability * 100, 0, 100);
   }
@@ -158,6 +168,8 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
     h_visivel,
     alpha,
     theta,
+    theta_aproximado,
+    depressao_horizonte_deg,
     prob_pct,
     cd,
     isVisible,
