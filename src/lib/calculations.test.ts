@@ -14,6 +14,7 @@ const baseInputs: CalcInputs = {
   h_turbina: 260,
   h_obs: 2,
   largura_km: 10,
+  num_turbinas: 9,
   area: 1500,
   ci: 35,
   k: 1.13,
@@ -76,6 +77,18 @@ describe("calculate", () => {
 
     expect(out.depressao_horizonte_deg).toBe(0);
     expect(out.theta).toBe(out.theta_aproximado);
+  });
+
+  it("calculates spacing between turbines from park width and turbine count", () => {
+    const out = calculate(makeInputs({ largura_km: 16, num_turbinas: 9 }));
+
+    expect(out.distancia_entre_turbinas_km).toBeCloseTo(2, 10);
+  });
+
+  it("returns zero spacing when there is only one turbine", () => {
+    const out = calculate(makeInputs({ largura_km: 16, num_turbinas: 1 }));
+
+    expect(out.distancia_entre_turbinas_km).toBe(0);
   });
 
   it("applies atmospheric attenuation beta before marking the turbine visible", () => {
@@ -154,6 +167,7 @@ describe("calculate", () => {
     expect(out.h_visivel).toBe(0);
     expect(out.alpha).toBe(0);
     expect(out.theta).toBe(0);
+    expect(out.distancia_entre_turbinas_km).toBe(0);
     expect(out.visibilityReason).toBe("no_structure");
     expect(Number.isFinite(out.cd)).toBe(true);
   });
@@ -163,5 +177,7 @@ describe("calculate", () => {
     expect(() => calculate(makeInputs({ k: 0 }))).toThrow(RangeError);
     expect(() => calculate(makeInputs({ beta: -0.1 }))).toThrow(RangeError);
     expect(() => calculate(makeInputs({ h_obs: -1 }))).toThrow(RangeError);
+    expect(() => calculate(makeInputs({ num_turbinas: 0 }))).toThrow(RangeError);
+    expect(() => calculate(makeInputs({ num_turbinas: 2.5 }))).toThrow(RangeError);
   });
 });
