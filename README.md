@@ -2,13 +2,14 @@
 
 Simulador em React + Vite para estimar a visibilidade geométrica e atmosférica de turbinas eólicas offshore a partir de um observador em terra.
 
-O painel combina cinco blocos de cálculo:
+O painel combina seis blocos de cálculo:
 
 - curvatura da Terra com raio efetivo por refração atmosférica (`k`)
 - altura oculta e altura visível da turbina
 - ocupação angular horizontal (`alpha`) e vertical real (`theta`)
 - contraste remanescente e probabilidade de detecção visual inspirada em Bishop (2002)
 - distância média entre turbinas a partir da largura do parque e do número de turbinas
+- análise de perturbação visual baseada em Gkeka-Serpetsidaki, Papadopoulos e Tsoutsos (2022)
 
 ## Recursos de usabilidade
 
@@ -16,6 +17,7 @@ O painel combina cinco blocos de cálculo:
 - Diagnóstico explícito do motivo da invisibilidade: horizonte, atmosfera, ambos ou ausência de estrutura.
 - Distância máxima por geometria, distância máxima por contraste e limitante dominante.
 - Campo `Número de Turbinas` para calcular o espaçamento médio entre turbinas.
+- Painel `Análise Gkeka-Serpetsidaki et al. (2022)` com `H_vis`, `A_vis`, `O_H`, `O_A` e status dos limiares.
 - Exportação de resumo técnico em PNG e impressão/salvamento em PDF pelo navegador.
 - Canvases com renderização sob demanda e animação opcional dos rotores.
 - Campo de visão periférico e perfil lateral sem camada visual de névoa.
@@ -51,7 +53,7 @@ npm run lint
 npm run build
 ```
 
-Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, depressão do horizonte, diagnóstico de invisibilidade, distâncias-limite, espaçamento entre turbinas e casos-limite.
+Os testes unitários cobrem `calculate()` para horizonte geométrico, refração (`k`), atenuação atmosférica (`beta`), limiar de contraste, depressão do horizonte, diagnóstico de invisibilidade, distâncias-limite, espaçamento entre turbinas, análise Gkeka 2022 e casos-limite.
 
 ## Estrutura de pastas
 
@@ -62,6 +64,7 @@ Os testes unitários cobrem `calculate()` para horizonte geométrico, refração
 │   ├── components/          # componentes reutilizáveis da interface
 │   │   ├── ControlSlider.tsx        # controles numéricos dos parâmetros
 │   │   ├── FOVCanvas.tsx            # campo de visão periférico, sem névoa visual
+│   │   ├── GkekaAssessment.tsx      # painel da análise Gkeka-Serpetsidaki et al. (2022)
 │   │   ├── MetricCard.tsx           # cartões de métricas do cabeçalho
 │   │   ├── ProfileCanvas.tsx        # perfil lateral da curvatura, sem névoa visual
 │   │   ├── TechnicalDocs.tsx        # memorial de cálculo exibido na página
@@ -69,7 +72,7 @@ Os testes unitários cobrem `calculate()` para horizonte geométrico, refração
 │   ├── hooks/               # hooks reutilizáveis
 │   │   └── useCanvasRenderer.ts     # setup de canvas e render sob demanda
 │   ├── lib/                 # núcleo matemático e testes
-│   │   ├── calculations.ts          # função calculate() e constantes físicas
+│   │   ├── calculations.ts          # função calculate(), constantes físicas e métricas Gkeka
 │   │   └── calculations.test.ts     # testes unitários do modelo
 │   ├── pages/               # telas principais
 │   │   └── Index.tsx                # composição da simulação e exportações
@@ -166,6 +169,28 @@ se num_turbinas = 1:
 
 Esse valor é uma aproximação de primeira ordem. Ele não modela múltiplas fileiras, stagger, corredores de navegação, exclusões ambientais ou layout real de aerogeradores.
 
+### Análise Gkeka-Serpetsidaki et al. (2022)
+
+A funcionalidade projeta a altura e a superfície visível da turbina em um plano de referência de `0,5 m`, soma os valores para todas as turbinas do cenário e compara com dois limiares de perturbação visual.
+
+```text
+H_vis,G = (0,5 / L) * H_vis,EVP
+A_vis,G = (0,5 / L)^2 * A * (H_vis,EVP / H)
+O_H = N * H_vis,G
+O_A = N * A_vis,G
+```
+
+Os limiares exibidos no programa são:
+
+```text
+O_H < 0,6 m
+O_A < 0,0025 m²
+```
+
+Adaptação usada no simulador: o artigo apresenta a projeção com a altura e a área da turbina. No programa, `H_vis,EVP` é a parte geometricamente visível já calculada pela curvatura/refração, e a área é proporcionalmente reduzida pela fração visível. Essa escolha evita contar como impacto visual a parcela abaixo do horizonte.
+
+Referência: Gkeka-Serpetsidaki, P.; Papadopoulos, S.; Tsoutsos, T. (2022). `Assessment of the visual impact of offshore wind farms`. Renewable Energy, 190, 358-370. DOI: `10.1016/j.renene.2022.03.091`.
+
 ### Atenuação atmosférica
 
 O contraste remanescente é calculado por decaimento exponencial:
@@ -204,6 +229,7 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 - A distância é uma linha reta horizontal simplificada entre observador e parque.
 - A turbina é representada por altura máxima e área transversal agregada, não por geometria 3D detalhada.
 - As turbinas são distribuídas linearmente na largura informada apenas para estimar espaçamento médio.
+- A análise Gkeka 2022 usa a porção geometricamente visível da turbina calculada pelo próprio simulador.
 - `beta` é uniforme ao longo de todo o percurso óptico.
 - A refração é constante e resumida por um único `k`.
 - A visibilidade atmosférica usa contraste percentual, não luminância espectral calibrada.
@@ -215,6 +241,7 @@ O fator `1.2` representa a amplificação perceptual aproximada pelo movimento d
 - Não modela variação temporal de clima, brilho solar, horário, cor da turbina ou fundo visual.
 - O parque é simplificado como uma largura angular contínua; layouts reais com múltiplas linhas podem alterar a percepção.
 - O espaçamento calculado não representa layout executivo do parque eólico.
+- A análise Gkeka 2022 é uma triagem geométrica/projetiva; ela não inclui percepção social, questionários, cor, fundo, iluminação ou condições meteorológicas.
 - A probabilidade de detecção depende de calibração empírica e deve ser tratada como indicador comparativo, não como verdade absoluta.
 - Para distâncias muito curtas, a aproximação de pequena curvatura deixa de ser o principal fator e deve ser interpretada com cautela.
 
