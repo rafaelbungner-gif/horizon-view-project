@@ -5,6 +5,9 @@ import {
   calculate,
   CONTRAST_THRESHOLD_PCT,
   EARTH_RADIUS_M,
+  GKEKA_AREA_THRESHOLD_M2,
+  GKEKA_HEIGHT_THRESHOLD_M,
+  GKEKA_REFERENCE_PLANE_DISTANCE_M,
   ROTOR_MOTION_AREA_FACTOR,
   type CalcInputs,
 } from "./calculations";
@@ -91,6 +94,31 @@ describe("calculate", () => {
     expect(out.distancia_entre_turbinas_km).toBe(0);
   });
 
+  it("calculates Gkeka 2022 projected disturbance metrics", () => {
+    const inputs = makeInputs({ dist_km: 10, h_obs: 500, h_turbina: 200, area: 1000, num_turbinas: 5 });
+    const out = calculate(inputs);
+    const distM = inputs.dist_km * 1000;
+    const scale = GKEKA_REFERENCE_PLANE_DISTANCE_M / distM;
+    const visibleFraction = out.h_visivel / inputs.h_turbina;
+    const expectedHeightPerTurbine = scale * out.h_visivel;
+    const expectedAreaPerTurbine = Math.pow(scale, 2) * inputs.area * visibleFraction;
+
+    expect(out.gkeka_hvis_por_turbina_m).toBeCloseTo(expectedHeightPerTurbine, 12);
+    expect(out.gkeka_avis_por_turbina_m2).toBeCloseTo(expectedAreaPerTurbine, 12);
+    expect(out.gkeka_oh_m).toBeCloseTo(expectedHeightPerTurbine * inputs.num_turbinas, 12);
+    expect(out.gkeka_oa_m2).toBeCloseTo(expectedAreaPerTurbine * inputs.num_turbinas, 12);
+  });
+
+  it("flags Gkeka 2022 thresholds using the aggregate disturbance values", () => {
+    const out = calculate(makeInputs({ dist_km: 1, h_obs: 500, h_turbina: 600, area: 5000, num_turbinas: 100 }));
+
+    expect(out.gkeka_oh_m).toBeGreaterThan(GKEKA_HEIGHT_THRESHOLD_M);
+    expect(out.gkeka_oa_m2).toBeGreaterThan(GKEKA_AREA_THRESHOLD_M2);
+    expect(out.gkeka_altura_ok).toBe(false);
+    expect(out.gkeka_area_ok).toBe(false);
+    expect(out.gkeka_limites_atendidos).toBe(false);
+  });
+
   it("applies atmospheric attenuation beta before marking the turbine visible", () => {
     const clearAir = calculate(makeInputs({ dist_km: 25, h_obs: 50, h_turbina: 300, beta: 0 }));
     const denseHaze = calculate(makeInputs({ dist_km: 25, h_obs: 50, h_turbina: 300, beta: 0.0003 }));
@@ -155,6 +183,9 @@ describe("calculate", () => {
     expect(out.h_visivel).toBe(0);
     expect(out.alpha).toBe(0);
     expect(out.theta).toBe(0);
+    expect(out.gkeka_oh_m).toBe(0);
+    expect(out.gkeka_oa_m2).toBe(0);
+    expect(out.gkeka_limites_atendidos).toBe(true);
     expect(out.prob_pct).toBe(0);
     expect(out.isVisible).toBe(false);
     expect(out.visibilityReason).toBe("hidden_by_horizon");
@@ -168,6 +199,8 @@ describe("calculate", () => {
     expect(out.alpha).toBe(0);
     expect(out.theta).toBe(0);
     expect(out.distancia_entre_turbinas_km).toBe(0);
+    expect(out.gkeka_oh_m).toBe(0);
+    expect(out.gkeka_oa_m2).toBe(0);
     expect(out.visibilityReason).toBe("no_structure");
     expect(Number.isFinite(out.cd)).toBe(true);
   });
