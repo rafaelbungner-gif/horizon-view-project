@@ -6,6 +6,7 @@ import ControlSlider from "@/components/ControlSlider";
 import FOVCanvas from "@/components/FOVCanvas";
 import ProfileCanvas from "@/components/ProfileCanvas";
 import VerticalFOVCanvas from "@/components/VerticalFOVCanvas";
+import GkekaAssessment from "@/components/GkekaAssessment";
 import TechnicalDocs from "@/components/TechnicalDocs";
 
 const DEFAULT_INPUTS: CalcInputs = {
@@ -69,6 +70,12 @@ const formatAtmosphericKm = (value: number) => {
   return `${value.toFixed(1)} km`;
 };
 
+const formatAreaM2 = (value: number) => {
+  if (value === 0) return "0 m²";
+  if (Math.abs(value) < 0.001) return `${value.toExponential(2)} m²`;
+  return `${value.toFixed(4)} m²`;
+};
+
 const getAtmosphericTransmission = (inputs: CalcInputs, out: CalcOutputs) => {
   if (inputs.ci <= 0) return 0;
   return clamp01(out.cd / inputs.ci);
@@ -82,6 +89,7 @@ const buildScenarioLines = (inputs: CalcInputs, out: CalcOutputs) => [
   `Ângulos: α ${out.alpha.toFixed(2)}° | θ real ${out.theta.toFixed(4)}° | θ geom ${out.theta_aproximado.toFixed(4)}°`,
   `Depressão do horizonte: ${out.depressao_horizonte_deg.toFixed(4)}° | Prob.: ${formatPct(out.prob_pct)}`,
   `Contraste remanescente: ${out.cd.toFixed(2)}% | transmissão atmos.: ${formatPct(getAtmosphericTransmission(inputs, out) * 100)}`,
+  `Gkeka 2022: O_H ${out.gkeka_oh_m.toFixed(4)} m | O_A ${formatAreaM2(out.gkeka_oa_m2)} | ${out.gkeka_limites_atendidos ? "dentro dos limiares" : "acima dos limiares"}`,
   `Limite geométrico: ${formatKm(out.distancia_geometrica_max_km)} | Limite atmosférico: ${formatAtmosphericKm(out.distancia_atmosferica_max_km)}`,
   `Limitante dominante: ${LIMITING_FACTOR_COPY[out.limitingFactor]}`,
 ];
@@ -124,7 +132,7 @@ const drawWrappedText = (
 const downloadSummaryPng = (inputs: CalcInputs, out: CalcOutputs) => {
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
-  canvas.height = 820;
+  canvas.height = 860;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -222,6 +230,7 @@ const Index = () => {
             <MetricCard label="Visível (m)" value={out.h_visivel.toFixed(1)} color={out.h_visivel > 0 ? "success" : "destructive"} />
             <MetricCard label="θ real" value={`${out.theta.toFixed(4)}°`} color="accent" />
             <MetricCard label="Espaçamento" value={`${out.distancia_entre_turbinas_km.toFixed(2)} km`} color="primary" />
+            <MetricCard label="Gkeka 2022" value={out.gkeka_limites_atendidos ? "OK" : "Atenção"} color={out.gkeka_limites_atendidos ? "success" : "destructive"} />
             <MetricCard label="Transmissão" value={formatPct(atmosphericTransmission * 100)} color={out.isVisible ? "success" : "warning"} />
             <MetricCard label="Prob. Detecção" value={out.isVisible ? `${out.prob_pct.toFixed(1)}%` : "0.0%"} color={out.isVisible ? "accent" : "destructive"} />
           </div>
@@ -286,6 +295,8 @@ const Index = () => {
             </div>
           </section>
         </div>
+
+        <GkekaAssessment inputs={inputs} out={out} />
 
         <div className="bg-card border border-border rounded-lg p-4 panel-glow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
