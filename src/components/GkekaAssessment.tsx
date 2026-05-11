@@ -156,7 +156,7 @@ const LimitCard = ({ label, value, threshold, ok, width }: { label: string; valu
 );
 
 const MiniEquation = ({ children }: { children: ReactNode }) => (
-  <math className="inline-block text-xl leading-relaxed" style={mathStyle}>
+  <math className="formula-math inline-block text-xl leading-relaxed" style={mathStyle}>
     <mrow>{children}</mrow>
   </math>
 );
