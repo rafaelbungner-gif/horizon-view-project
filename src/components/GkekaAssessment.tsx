@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from "react";
 import {
   GKEKA_AREA_THRESHOLD_M2,
   GKEKA_HEIGHT_THRESHOLD_M,
@@ -10,6 +11,10 @@ interface GkekaAssessmentProps {
   inputs: CalcInputs;
   out: CalcOutputs;
 }
+
+const mathStyle: CSSProperties = {
+  fontFamily: '"Cambria Math", Cambria, "Times New Roman", serif',
+};
 
 const formatMeters = (value: number) => `${value.toFixed(4)} m`;
 const formatArea = (value: number) => {
@@ -41,6 +46,23 @@ const GkekaAssessment = ({ inputs, out }: GkekaAssessmentProps) => {
         <span className={`inline-flex self-start rounded-full border px-3 py-1.5 text-[0.68rem] font-bold uppercase ${limitClass(out.gkeka_limites_atendidos)}`}>
           {statusLabel}
         </span>
+      </div>
+
+      <div className="rounded-lg border border-border bg-background/35 p-4 overflow-x-auto">
+        <div className="flex min-w-max flex-wrap items-center gap-x-6 gap-y-3 text-lg text-foreground" style={mathStyle}>
+          <MiniFormula>
+            <Var>H<Sub>vis</Sub></Var><span>=</span><MiniFrac top="0,5 m" bottom="L" /><span>×</span><Var>H</Var>
+          </MiniFormula>
+          <MiniFormula>
+            <Var>A<Sub>vis</Sub></Var><span>=</span><Group>(<MiniFrac top="0,5 m" bottom="L" />)</Group><Sup>2</Sup><span>×</span><Var>A</Var>
+          </MiniFormula>
+          <MiniFormula>
+            <Var>O<Sub>H</Sub></Var><span>&lt;</span><span>0,6 m</span>
+          </MiniFormula>
+          <MiniFormula>
+            <Var>O<Sub>A</Sub></Var><span>&lt;</span><span>0,0025 m<Sup>2</Sup></span>
+          </MiniFormula>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
@@ -100,5 +122,21 @@ const LimitCard = ({ label, value, threshold, ok, width }: { label: string; valu
     <span className="mt-1 block text-xs text-muted-foreground">{threshold}</span>
   </div>
 );
+
+const MiniFormula = ({ children }: { children: ReactNode }) => (
+  <span className="inline-flex items-center gap-2 whitespace-nowrap">{children}</span>
+);
+
+const MiniFrac = ({ top, bottom }: { top: ReactNode; bottom: ReactNode }) => (
+  <span className="inline-flex flex-col items-center justify-center align-middle text-center text-[0.95em] leading-none">
+    <span className="border-b border-current px-1 pb-0.5">{top}</span>
+    <span className="px-1 pt-0.5">{bottom}</span>
+  </span>
+);
+
+const Var = ({ children }: { children: ReactNode }) => <span className="italic">{children}</span>;
+const Group = ({ children }: { children: ReactNode }) => <span className="inline-flex items-center gap-1">{children}</span>;
+const Sub = ({ children }: { children: ReactNode }) => <sub className="text-[0.62em] leading-none">{children}</sub>;
+const Sup = ({ children }: { children: ReactNode }) => <sup className="text-[0.62em] leading-none">{children}</sup>;
 
 export default GkekaAssessment;
