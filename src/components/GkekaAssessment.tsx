@@ -51,16 +51,16 @@ const GkekaAssessment = ({ inputs, out }: GkekaAssessmentProps) => {
       <div className="rounded-lg border border-border bg-background/35 p-4 overflow-x-auto">
         <div className="flex min-w-max flex-wrap items-center gap-x-6 gap-y-3 text-lg text-foreground" style={mathStyle}>
           <MiniFormula>
-            <Var>H<Sub>vis</Sub></Var><span>=</span><MiniFrac top="0,5 m" bottom="L" /><span>×</span><Var>H</Var>
+            <Var>H<Sub>vis,G</Sub></Var><span>=</span><MiniFrac top="0,5 m" bottom="L" /><span>×</span><Var>H<Sub>vis,EVP</Sub></Var>
           </MiniFormula>
           <MiniFormula>
-            <Var>A<Sub>vis</Sub></Var><span>=</span><Group>(<MiniFrac top="0,5 m" bottom="L" />)</Group><Sup>2</Sup><span>×</span><Var>A</Var>
+            <Var>A<Sub>vis,G</Sub></Var><span>=</span><Group>(<MiniFrac top="0,5 m" bottom="L" />)</Group><Sup>2</Sup><span>×</span><Var>A</Var><span>×</span><MiniFrac top={<Var>H<Sub>vis,EVP</Sub></Var>} bottom="H" />
           </MiniFormula>
           <MiniFormula>
-            <Var>O<Sub>H</Sub></Var><span>&lt;</span><span>0,6 m</span>
+            <Var>O<Sub>H</Sub></Var><span>=</span><Var>N</Var><span>×</span><Var>H<Sub>vis,G</Sub></Var><span>&lt;</span><span>0,6 m</span>
           </MiniFormula>
           <MiniFormula>
-            <Var>O<Sub>A</Sub></Var><span>&lt;</span><span>0,0025 m<Sup>2</Sup></span>
+            <Var>O<Sub>A</Sub></Var><span>=</span><Var>N</Var><span>×</span><Var>A<Sub>vis,G</Sub></Var><span>&lt;</span><span>0,0025 m<Sup>2</Sup></span>
           </MiniFormula>
         </div>
       </div>
