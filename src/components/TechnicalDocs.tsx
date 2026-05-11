@@ -8,7 +8,7 @@ const TechnicalDocs = () => (
       Memorial de Cálculo e Referências
     </h2>
     <p className="text-muted-foreground text-sm mb-6">
-      O painel combina curvatura terrestre, refração atmosférica, atenuação de contraste, uma leitura angular corrigida pela depressão do horizonte e o espaçamento médio entre turbinas.
+      O painel combina curvatura terrestre, refração atmosférica, atenuação de contraste, leitura angular corrigida, espaçamento médio entre turbinas e uma análise de perturbação visual baseada em Gkeka-Serpetsidaki, Papadopoulos e Tsoutsos (2022).
     </p>
 
     <Section title="1. Curvatura da Terra e refração">
@@ -35,7 +35,7 @@ const TechnicalDocs = () => (
     </Section>
 
     <Section title="3. Distância entre turbinas">
-      <p>O novo campo de quantidade de turbinas calcula o espaçamento médio linear ao longo da largura informada do parque. O resultado é exibido no cabeçalho, no diagnóstico e nos resumos exportados.</p>
+      <p>O campo de quantidade de turbinas calcula o espaçamento médio linear ao longo da largura informada do parque. O resultado é exibido no cabeçalho, no diagnóstico e nos resumos exportados.</p>
       <DocCard>
         <Math tex="s = \\frac{W}{N - 1},\\quad N > 1" block />
         <Math tex="s = 0,\\quad N = 1" block />
@@ -45,7 +45,20 @@ const TechnicalDocs = () => (
       </DocCard>
     </Section>
 
-    <Section title="4. Atmosfera, contraste e alcance visual">
+    <Section title="4. Análise Gkeka-Serpetsidaki et al. (2022)">
+      <p>Esta funcionalidade estima a perturbação visual por projeção: a altura e a superfície visível da turbina são projetadas em um plano de referência de 0,5 m e somadas para todas as turbinas do cenário.</p>
+      <DocCard>
+        <Math tex="H_{vis,G} = \\frac{0{,}5}{L} \\cdot H_{vis,EVP}" block />
+        <Math tex="A_{vis,G} = \\left(\\frac{0{,}5}{L}\\right)^2 \\cdot A \\cdot \\frac{H_{vis,EVP}}{H}" block />
+        <Math tex="O_H = N \\cdot H_{vis,G} \\quad ; \\quad O_A = N \\cdot A_{vis,G}" block />
+        <Math tex="O_H < 0{,}6m \\quad ; \\quad O_A < 0{,}0025m^2" block />
+        <p className="text-xs text-muted-foreground mt-3">
+          Adaptação usada no simulador: <Math tex="H_{vis,EVP}" /> é a parcela da turbina acima do horizonte já corrigida por curvatura/refração, e a área entra proporcionalmente a essa fração visível. A métrica não considera atenuação atmosférica, cor, fundo visual ou percepção social; ela funciona como um segundo critério geométrico de triagem.
+        </p>
+      </DocCard>
+    </Section>
+
+    <Section title="5. Atmosfera, contraste e alcance visual">
       <p>O contraste remanescente segue um decaimento exponencial. Se o contraste inicial já estiver abaixo de 2%, o limite atmosférico é zero e a interface mostra o alvo como já invisível.</p>
       <DocCard>
         <Math tex="C_d = C_i \\cdot e^{-\\beta \\cdot d}" block />
@@ -56,7 +69,7 @@ const TechnicalDocs = () => (
       </DocCard>
     </Section>
 
-    <Section title="5. Probabilidade visual inspirada em Bishop (2002)">
+    <Section title="6. Probabilidade visual inspirada em Bishop (2002)">
       <p>O código usa o modelo logístico univariado equivalente ao intercepto consolidado <Math tex="-3{,}27" />, evitando somar simultaneamente constantes de tabelas diferentes.</p>
       <DocCard>
         <Math tex="M = area \\cdot 1{,}2" block />
@@ -66,7 +79,7 @@ const TechnicalDocs = () => (
       </DocCard>
     </Section>
 
-    <Section title="6. Parâmetros de referência">
+    <Section title="7. Parâmetros de referência">
       <div className="grid gap-4 md:grid-cols-2">
         <DocCard accent="primary">
           <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de refração (k)</h4>
