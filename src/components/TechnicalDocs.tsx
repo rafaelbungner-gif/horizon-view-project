@@ -148,7 +148,53 @@ const TechnicalDocs = () => (
       </DocCard>
     </Section>
 
-    <Section title="7. Parâmetros de referência">
+    <Section title="7. Variáveis e fontes das fórmulas">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <GlossaryCard title="Geometria e horizonte" source="Fonte: geometria esférica do horizonte terrestre com raio efetivo para refração.">
+          <VariableItem symbol={<SubVar symbol="R" sub="terra" />}>Raio médio da Terra usado como base do modelo, em metros.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="R" sub="efetivo" />}>Raio ajustado pela refração atmosférica, igual a <InlineFormula><SubVar symbol="R" sub="terra" /><Op>×</Op><Var>k</Var></InlineFormula>.</VariableItem>
+          <VariableItem symbol={<Var>k</Var>}>Coeficiente de refração. Valores maiores alongam o horizonte aparente.</VariableItem>
+          <VariableItem symbol={<Var>d</Var>}>Distância entre observador e parque/turbina, em metros nas fórmulas.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="d" sub="obs" />}>Distância até o horizonte do observador.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="h" sub="obs" />}>Altura do observador acima do nível do mar.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="h" sub="turbina" />}>Altura total da turbina considerada no cenário.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="h" sub="oculta" />}>Parcela da turbina abaixo da linha do horizonte por curvatura.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="h" sub="visível" />}>Parcela da turbina ainda visível acima do horizonte.</VariableItem>
+        </GlossaryCard>
+
+        <GlossaryCard title="Ângulos e arranjo" source="Fonte: trigonometria de abertura angular e aproximação de pequenos ângulos.">
+          <VariableItem symbol={<Var>W</Var>}>Largura linear do parque eólico no horizonte.</VariableItem>
+          <VariableItem symbol={<Var>N</Var>}>Número de turbinas usado no cenário.</VariableItem>
+          <VariableItem symbol={<Var>s</Var>}>Espaçamento médio linear entre turbinas ao longo da largura informada.</VariableItem>
+          <VariableItem symbol={<Var>α</Var>}>Abertura horizontal ocupada pelo parque no campo de visão.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="θ" sub="geom" />}>Ângulo vertical da parcela visível da turbina antes da correção do horizonte.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="δ" sub="h" />}>Depressão angular do horizonte para o observador elevado.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="θ" sub="real" />}>Ângulo vertical final usado na leitura visual, somando geometria e depressão do horizonte quando aplicável.</VariableItem>
+        </GlossaryCard>
+
+        <GlossaryCard title="Atmosfera e Bishop" source="Fontes: decaimento exponencial de contraste e modelo logístico de Bishop (2002).">
+          <VariableItem symbol={<Var>β</Var>}>Coeficiente de extinção atmosférica. Quanto maior, mais rápido o contraste desaparece.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="C" sub="i" />}>Contraste inicial da turbina antes da atenuação atmosférica.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="C" sub="d" />}>Contraste remanescente na distância simulada.</VariableItem>
+          <VariableItem symbol={<Var>M</Var>}>Magnitude visual aproximada pela área transversal corrigida pelo fator de movimento do rotor.</VariableItem>
+          <VariableItem symbol={<Var>S</Var>}>Tamanho visual usado no modelo probabilístico.</VariableItem>
+          <VariableItem symbol={<Var>Z</Var>}>Logit do modelo de detecção visual.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="P" sub="detecção" />}>Probabilidade estimada de detecção visual, em porcentagem.</VariableItem>
+        </GlossaryCard>
+
+        <GlossaryCard title="Gkeka 2022" source="Fonte: Gkeka-Serpetsidaki, Papadopoulos e Tsoutsos (2022), com adaptação para a altura efetivamente visível no EVP.">
+          <VariableItem symbol={<Var>L</Var>}>Distância até a turbina no método projetivo, em metros.</VariableItem>
+          <VariableItem symbol={<Var>A</Var>}>Área sólida transversal informada para a turbina.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="H" sub="vis,G" />}>Altura visível projetada no plano de referência de 0,5 m.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="A" sub="vis,G" />}>Área visível projetada no plano de referência de 0,5 m.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="H" sub="vis,cm" />}>Mesma altura projetada em centímetros para leitura visual direta.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="O" sub="H" />}>Soma das alturas projetadas para todas as turbinas.</VariableItem>
+          <VariableItem symbol={<SubVar symbol="O" sub="A" />}>Soma das áreas projetadas para todas as turbinas.</VariableItem>
+        </GlossaryCard>
+      </div>
+    </Section>
+
+    <Section title="8. Parâmetros de referência">
       <div className="grid gap-4 md:grid-cols-2">
         <DocCard accent="primary">
           <h4 className="font-bold text-foreground text-sm mb-2">Coeficiente de refração (k)</h4>
@@ -184,16 +230,31 @@ const DocCard = ({ children, accent = "accent" }: { children: ReactNode; accent?
   </div>
 );
 
+const GlossaryCard = ({ title, source, children }: { title: string; source: string; children: ReactNode }) => (
+  <DocCard>
+    <h4 className="font-bold text-foreground text-sm mb-1">{title}</h4>
+    <p className="text-[0.68rem] text-muted-foreground mb-3">{source}</p>
+    <ul className="space-y-2 text-xs text-muted-foreground">{children}</ul>
+  </DocCard>
+);
+
+const VariableItem = ({ symbol, children }: { symbol: ReactNode; children: ReactNode }) => (
+  <li className="grid gap-2 sm:grid-cols-[8rem_1fr]">
+    <span className="text-foreground"><InlineFormula>{symbol}</InlineFormula></span>
+    <span>{children}</span>
+  </li>
+);
+
 const Equation = ({ children }: { children: ReactNode }) => (
   <div className="bg-background/50 px-4 py-3 rounded my-2 overflow-x-auto">
-    <math className="min-w-max text-2xl text-foreground leading-relaxed" style={blockMathStyle}>
+    <math className="formula-math min-w-max text-2xl text-foreground leading-relaxed" style={blockMathStyle}>
       <mrow>{children}</mrow>
     </math>
   </div>
 );
 
 const InlineFormula = ({ children }: { children: ReactNode }) => (
-  <math className="inline-block align-middle text-foreground" style={mathStyle}>
+  <math className="formula-math inline-block align-middle text-foreground" style={mathStyle}>
     <mrow>{children}</mrow>
   </math>
 );
