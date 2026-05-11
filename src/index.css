@@ -51,6 +51,18 @@
   }
 }
 
+@layer components {
+  .formula-math,
+  .formula-math * {
+    font-family: "Cambria Math", Cambria, "Times New Roman", serif !important;
+  }
+
+  .formula-math {
+    math-style: normal;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+}
+
 @layer utilities {
   .glow-accent {
     text-shadow: 0 0 20px hsl(210 80% 63% / 0.5);
