@@ -27,6 +27,13 @@ export interface CalcOutputs {
   theta_aproximado: number;
   depressao_horizonte_deg: number;
   distancia_entre_turbinas_km: number;
+  gkeka_hvis_por_turbina_m: number;
+  gkeka_avis_por_turbina_m2: number;
+  gkeka_oh_m: number;
+  gkeka_oa_m2: number;
+  gkeka_altura_ok: boolean;
+  gkeka_area_ok: boolean;
+  gkeka_limites_atendidos: boolean;
   prob_pct: number;
   cd: number;
   isVisible: boolean;
@@ -44,6 +51,9 @@ export const CONTRAST_THRESHOLD_PCT = 2.0;
 export const ROTOR_MOTION_AREA_FACTOR = 1.2;
 export const BISHOP_LOGIT_INTERCEPT = -3.27;
 export const BISHOP_LOGIT_SLOPE = 0.0124;
+export const GKEKA_REFERENCE_PLANE_DISTANCE_M = 0.5;
+export const GKEKA_HEIGHT_THRESHOLD_M = 0.6;
+export const GKEKA_AREA_THRESHOLD_M2 = 0.0025;
 
 const DEG_PER_RAD = 180 / Math.PI;
 const ARC_MINUTES_PER_DEGREE = 60;
@@ -144,6 +154,17 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
   const h_oculta = clamp(rawHiddenHeight, 0, h_turbina);
   const h_visivel = Math.max(0, h_turbina - h_oculta);
 
+  const visibleFraction = h_turbina > 0 ? h_visivel / h_turbina : 0;
+  const visibleAreaForProjection = area * visibleFraction;
+  const gkekaProjectionScale = GKEKA_REFERENCE_PLANE_DISTANCE_M / dist_m;
+  const gkeka_hvis_por_turbina_m = gkekaProjectionScale * h_visivel;
+  const gkeka_avis_por_turbina_m2 = Math.pow(gkekaProjectionScale, 2) * visibleAreaForProjection;
+  const gkeka_oh_m = gkeka_hvis_por_turbina_m * num_turbinas;
+  const gkeka_oa_m2 = gkeka_avis_por_turbina_m2 * num_turbinas;
+  const gkeka_altura_ok = gkeka_oh_m < GKEKA_HEIGHT_THRESHOLD_M;
+  const gkeka_area_ok = gkeka_oa_m2 < GKEKA_AREA_THRESHOLD_M2;
+  const gkeka_limites_atendidos = gkeka_altura_ok && gkeka_area_ok;
+
   const cd = ci * Math.exp(-beta * dist_m);
   const atmosfera_permite = cd + FLOAT_TOLERANCE >= CONTRAST_THRESHOLD_PCT;
   const isVisible = h_visivel > 0 && atmosfera_permite;
@@ -182,6 +203,13 @@ export function calculate(inputs: CalcInputs): CalcOutputs {
     theta_aproximado,
     depressao_horizonte_deg,
     distancia_entre_turbinas_km,
+    gkeka_hvis_por_turbina_m,
+    gkeka_avis_por_turbina_m2,
+    gkeka_oh_m,
+    gkeka_oa_m2,
+    gkeka_altura_ok,
+    gkeka_area_ok,
+    gkeka_limites_atendidos,
     prob_pct,
     cd,
     isVisible,
