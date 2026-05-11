@@ -17,6 +17,12 @@ const mathStyle: CSSProperties = {
 };
 
 const formatMeters = (value: number) => `${value.toFixed(4)} m`;
+const formatCentimeters = (valueMeters: number) => {
+  const valueCm = valueMeters * 100;
+  if (valueCm === 0) return "0,00 cm";
+  if (Math.abs(valueCm) < 0.01) return `${valueCm.toExponential(2)} cm`;
+  return `${valueCm.toFixed(2)} cm`;
+};
 const formatArea = (value: number) => {
   if (value === 0) return "0 m²";
   if (Math.abs(value) < 0.001) return `${value.toExponential(2)} m²`;
@@ -31,6 +37,7 @@ const ratioWidth = (value: number, threshold: number) => `${Math.min((value / th
 
 const GkekaAssessment = ({ inputs, out }: GkekaAssessmentProps) => {
   const statusLabel = out.gkeka_limites_atendidos ? "Dentro dos limiares" : "Acima dos limiares";
+  const verticalBandWidth = ratioWidth(out.gkeka_oh_m, GKEKA_HEIGHT_THRESHOLD_M);
 
   return (
     <section className="bg-card border border-border rounded-lg p-5 panel-glow space-y-4">
@@ -49,20 +56,45 @@ const GkekaAssessment = ({ inputs, out }: GkekaAssessmentProps) => {
       </div>
 
       <div className="rounded-lg border border-border bg-background/35 p-4 overflow-x-auto">
-        <div className="flex min-w-max flex-wrap items-center gap-x-6 gap-y-3 text-lg text-foreground" style={mathStyle}>
-          <MiniFormula>
-            <Var>H<Sub>vis,G</Sub></Var><span>=</span><MiniFrac top="0,5 m" bottom="L" /><span>×</span><Var>H<Sub>vis,EVP</Sub></Var>
-          </MiniFormula>
-          <MiniFormula>
-            <Var>A<Sub>vis,G</Sub></Var><span>=</span><Group>(<MiniFrac top="0,5 m" bottom="L" />)</Group><Sup>2</Sup><span>×</span><Var>A</Var><span>×</span><MiniFrac top={<Var>H<Sub>vis,EVP</Sub></Var>} bottom="H" />
-          </MiniFormula>
-          <MiniFormula>
-            <Var>O<Sub>H</Sub></Var><span>=</span><Var>N</Var><span>×</span><Var>H<Sub>vis,G</Sub></Var><span>&lt;</span><span>0,6 m</span>
-          </MiniFormula>
-          <MiniFormula>
-            <Var>O<Sub>A</Sub></Var><span>=</span><Var>N</Var><span>×</span><Var>A<Sub>vis,G</Sub></Var><span>&lt;</span><span>0,0025 m<Sup>2</Sup></span>
-          </MiniFormula>
+        <div className="flex min-w-max flex-wrap items-center gap-x-8 gap-y-4 text-foreground">
+          <MiniEquation>
+            <SubVar symbol="H" sub="vis,G" /><Op>=</Op><Frac top={<Row><Num>0,5</Num><Text> m</Text></Row>} bottom={<Var>L</Var>} /><Op>×</Op><SubVar symbol="H" sub="vis,EVP" />
+          </MiniEquation>
+          <MiniEquation>
+            <SubVar symbol="A" sub="vis,G" /><Op>=</Op>
+            <Sup base={<Paren><Frac top={<Row><Num>0,5</Num><Text> m</Text></Row>} bottom={<Var>L</Var>} /></Paren>} exp={<Num>2</Num>} />
+            <Op>×</Op><Var>A</Var><Op>×</Op><Frac top={<SubVar symbol="H" sub="vis,EVP" />} bottom={<Var>H</Var>} />
+          </MiniEquation>
+          <MiniEquation>
+            <SubVar symbol="O" sub="H" /><Op>=</Op><Var>N</Var><Op>×</Op><SubVar symbol="H" sub="vis,G" /><Op>&lt;</Op><Row><Num>0,6</Num><Text> m</Text></Row>
+          </MiniEquation>
+          <MiniEquation>
+            <SubVar symbol="O" sub="A" /><Op>=</Op><Var>N</Var><Op>×</Op><SubVar symbol="A" sub="vis,G" /><Op>&lt;</Op><Row><Num>0,0025</Num><Sup base={<Text> m</Text>} exp={<Num>2</Num>} /></Row>
+          </MiniEquation>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-accent/30 bg-accent/10 p-4">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+          <div>
+            <span className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Faixa vertical no campo de visão
+            </span>
+            <strong className="block mt-1 text-2xl font-mono text-foreground">
+              {formatCentimeters(out.gkeka_hvis_por_turbina_m)} por turbina
+            </strong>
+          </div>
+          <div className="text-xs text-muted-foreground md:text-right">
+            <span className="block">O_H agregado: <strong className="text-foreground">{formatCentimeters(out.gkeka_oh_m)}</strong></span>
+            <span className="block">Limiar Gkeka: {formatCentimeters(GKEKA_HEIGHT_THRESHOLD_M)}</span>
+          </div>
+        </div>
+        <div className="mt-3 h-3 rounded-full bg-background overflow-hidden border border-border/70">
+          <div className={out.gkeka_altura_ok ? "h-full bg-success" : "h-full bg-destructive"} style={{ width: verticalBandWidth }} />
+        </div>
+        <p className="mt-2 text-[0.7rem] text-muted-foreground">
+          Leitura em centímetros no plano visual de 50 cm: a primeira medida é a altura aparente de uma turbina; o O_H agregado é a soma projetiva usada pelo critério Gkeka para {inputs.num_turbinas} turbinas.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
@@ -123,20 +155,39 @@ const LimitCard = ({ label, value, threshold, ok, width }: { label: string; valu
   </div>
 );
 
-const MiniFormula = ({ children }: { children: ReactNode }) => (
-  <span className="inline-flex items-center gap-2 whitespace-nowrap">{children}</span>
+const MiniEquation = ({ children }: { children: ReactNode }) => (
+  <math className="inline-block text-xl leading-relaxed" style={mathStyle}>
+    <mrow>{children}</mrow>
+  </math>
 );
 
-const MiniFrac = ({ top, bottom }: { top: ReactNode; bottom: ReactNode }) => (
-  <span className="inline-flex flex-col items-center justify-center align-middle text-center text-[0.95em] leading-none">
-    <span className="border-b border-current px-1 pb-0.5">{top}</span>
-    <span className="px-1 pt-0.5">{bottom}</span>
-  </span>
+const Var = ({ children }: { children: ReactNode }) => <mi>{children}</mi>;
+const Num = ({ children }: { children: ReactNode }) => <mn>{children}</mn>;
+const Op = ({ children }: { children: ReactNode }) => <mo>{children}</mo>;
+const Text = ({ children }: { children: ReactNode }) => <mtext>{children}</mtext>;
+const Row = ({ children }: { children: ReactNode }) => <mrow>{children}</mrow>;
+
+const SubVar = ({ symbol, sub }: { symbol: string; sub: string }) => (
+  <msub>
+    <mi>{symbol}</mi>
+    <mtext>{sub}</mtext>
+  </msub>
 );
 
-const Var = ({ children }: { children: ReactNode }) => <span className="italic">{children}</span>;
-const Group = ({ children }: { children: ReactNode }) => <span className="inline-flex items-center gap-1">{children}</span>;
-const Sub = ({ children }: { children: ReactNode }) => <sub className="text-[0.62em] leading-none">{children}</sub>;
-const Sup = ({ children }: { children: ReactNode }) => <sup className="text-[0.62em] leading-none">{children}</sup>;
+const Sup = ({ base, exp }: { base: ReactNode; exp: ReactNode }) => (
+  <msup>
+    <mrow>{base}</mrow>
+    <mrow>{exp}</mrow>
+  </msup>
+);
+
+const Frac = ({ top, bottom }: { top: ReactNode; bottom: ReactNode }) => (
+  <mfrac>
+    <mrow>{top}</mrow>
+    <mrow>{bottom}</mrow>
+  </mfrac>
+);
+
+const Paren = ({ children }: { children: ReactNode }) => <mrow><mo>(</mo>{children}<mo>)</mo></mrow>;
 
 export default GkekaAssessment;
